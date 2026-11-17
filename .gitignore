@@ -1,0 +1,9 @@
+# Personal data never goes to GitHub
+docs/seed.json
+paisa-starting-plan.json
+*-backup-*.json
+tools/
+.claude/
+.DS_Store
+node_modules/
+tests/*.local.test.mjs
