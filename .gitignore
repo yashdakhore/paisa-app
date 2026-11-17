@@ -7,3 +7,10 @@ tools/
 .DS_Store
 node_modules/
 tests/*.local.test.mjs
+
+# iOS
+ios/Kosh/starting-plan.json
+ios/build/
+ios/ParserTests/bin/
+*.xcuserstate
+xcuserdata/
