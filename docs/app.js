@@ -435,25 +435,32 @@ function openForm({ title, fields, value = {}, onSave, onDelete, saveLabel = 'Sa
 // ---------- entry (voice) sheet ----------
 const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
 
-// One speech recognizer, reused for every entry (Safari on iPhone misbehaves when a new one is
-// created each time). Each listen() call is a session; late events from an older recognizer or
-// session are ignored, and a watchdog resets things if the browser never reports the end.
-const voice = { rec: null, active: false, h: null, pending: null, watchdog: null };
+// Speech recognition. Chrome/Edge: one recognizer reused for every entry. iPhone/iPad Safari: a fresh
+// recognizer per entry (WebKit tends to go silent when one is reused). Late events from an older
+// recognizer are ignored, a watchdog resets things if the browser never reports the end, and if no
+// audio starts within a few seconds the user is offered keyboard dictation instead.
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const voice = { rec: null, active: false, h: null, pending: null, watchdog: null, audioTimer: null, heard: false };
 
-function recognizer() {
-  if (voice.rec) return voice.rec;
+function recognizer(fresh = IS_IOS) {
+  if (voice.rec && !fresh) return voice.rec;
   const r = new (getSR())();
   r.lang = 'en-IN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  const mine = () => r === voice.rec;
+  const gotAudio = () => { if (mine()) { voice.heard = true; clearTimeout(voice.audioTimer); voice.h?.audio?.(); } };
+  r.onaudiostart = gotAudio; r.onspeechstart = gotAudio;
   r.onresult = (ev) => {
-    if (r !== voice.rec) return;
-    voice.h?.result(ev);
+    if (!mine()) return;
+    gotAudio(); voice.h?.result(ev);
     if (ev.results[ev.results.length - 1]?.isFinal) { try { r.stop(); } catch { /* already stopping */ } }
   };
-  r.onerror = (ev) => { if (r === voice.rec && ev.error !== 'aborted') voice.h?.error(ev.error); };
+  r.onerror = (ev) => { if (mine() && ev.error !== 'aborted') { clearTimeout(voice.audioTimer); voice.h?.error(ev.error); voice.h && (voice.h.errored = true); } };
   r.onend = () => {
-    if (r !== voice.rec) return;
-    voice.active = false; clearTimeout(voice.watchdog);
-    const h = voice.h; voice.h = null; h?.end();
+    if (!mine()) return;
+    voice.active = false; clearTimeout(voice.watchdog); clearTimeout(voice.audioTimer);
+    const h = voice.h; voice.h = null;
+    if (h && !h.errored && !h.gotResult) h.error('no-result');
+    h?.end();
     if (voice.pending) { const go = voice.pending; voice.pending = null; go(); }
   };
   voice.rec = r;
@@ -462,11 +469,19 @@ function recognizer() {
 
 function resetVoice() {
   try { voice.rec?.abort(); } catch { /* ignore */ }
-  voice.rec = null; voice.active = false; clearTimeout(voice.watchdog);
+  voice.rec = null; voice.active = false; clearTimeout(voice.watchdog); clearTimeout(voice.audioTimer);
   const h = voice.h; voice.h = null; h?.end();
 }
 
 function startVoice(handlers) {
+  const armTimers = () => {
+    clearTimeout(voice.watchdog); clearTimeout(voice.audioTimer); voice.heard = false;
+    voice.watchdog = setTimeout(() => { if (voice.active) resetVoice(); }, 15000);
+    // No microphone audio within 4s: this browser's voice engine isn't working here.
+    voice.audioTimer = setTimeout(() => {
+      if (voice.active && !voice.heard && voice.h === handlers) { handlers.errored = true; handlers.error('no-audio'); resetVoice(); }
+    }, 4000);
+  };
   const go = () => {
     voice.h = handlers; voice.active = true;
     try { recognizer().start(); } catch {
@@ -474,8 +489,7 @@ function startVoice(handlers) {
       voice.rec = null;
       try { recognizer().start(); } catch { voice.active = false; voice.h = null; handlers.error('start-failed'); handlers.end(); return; }
     }
-    clearTimeout(voice.watchdog);
-    voice.watchdog = setTimeout(() => { if (voice.active) resetVoice(); }, 15000);
+    armTimers();
   };
   if (!voice.active) { go(); return; }
   // A previous session is still winding down. Start right away (while still inside the user's tap,
@@ -485,8 +499,8 @@ function startVoice(handlers) {
   try { old.abort(); } catch { /* ignore */ }
   try {
     voice.h = handlers; voice.active = true;
-    recognizer().start();
-    voice.watchdog = setTimeout(() => { if (voice.active) resetVoice(); }, 15000);
+    recognizer(true).start();
+    armTimers();
   } catch {
     // Browser allows only one at a time: wait for the old one to finish, then start.
     voice.rec = old; voice.active = true; voice.h = null; voice.pending = go;
@@ -512,7 +526,8 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
   openSheet(`<h3>${existing ? 'Edit entry' : 'New entry'}</h3>
     ${existing ? '' : `<div class="voice-box"><textarea id="vText" rows="2" placeholder='Say or type: "spent 250 on groceries"'>${esc(text)}</textarea>
       ${SR ? `<button class="mic-btn" id="vMic" aria-label="Speak">${icon('mic', 26)}</button>` : ''}</div>
-      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. Check the details below, then Save.' : 'Tap the box and use the mic key on your keyboard to dictate, or type. Check the details below, then Save.'}</div>`}
+      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. Check the details below, then Save.' : 'Tap the box and use the mic key on your keyboard to dictate, or type. Check the details below, then Save.'}</div>
+      <button type="button" class="btn block ${SR && !IS_IOS ? 'hidden' : ''}" id="vKbd" style="margin:-4px 0 16px">${icon('keyboard', 18)} Use keyboard dictation</button>`}
     <form id="eform">
       <div class="grid2">
         <label class="f">Amount (₹)<input name="amount" type="number" inputmode="decimal" step="any" value="${e.amount ?? ''}" required></label>
@@ -563,24 +578,31 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
     const mic = $('#vMic');
     const startListening = () => {
       if (!SR) return;
-      mic.classList.add('listening'); $('#vHint').textContent = 'Listening… say e.g. "spent 250 on groceries"';
-      startVoice({
+      mic.classList.add('listening');
+      const h = {
+        audio: () => { $('#vHint').textContent = 'Listening… say e.g. "spent 250 on groceries"'; },
         result: (ev) => {
+          h.gotResult = true;
           let interim = ''; let finalText = '';
           for (const r of ev.results) (r.isFinal ? (finalText += r[0].transcript) : (interim += r[0].transcript));
           vt.value = (finalText || interim).trim();
           applyParse(vt.value);
         },
         error: (code) => {
+          $('#vKbd').classList.remove('hidden');
           $('#vHint').textContent = code === 'not-allowed' || code === 'service-not-allowed'
-            ? 'Microphone blocked. Allow it in settings, or tap the box and use the keyboard mic.'
-            : code === 'no-speech' ? "Didn't catch that. Tap the mic to try again."
-              : code === 'start-failed' ? 'Voice could not start. Tap the mic again, or use the keyboard mic.'
-                : 'Voice error: ' + code + '. Tap the mic to try again, or type instead.';
+            ? (IS_IOS ? 'iPhone blocked voice here. Use keyboard dictation below, or allow Microphone and Speech Recognition for Safari in Settings.' : 'Microphone blocked. Allow it in settings, or use keyboard dictation below.')
+            : code === 'no-audio' ? 'The mic didn’t start on this device. Use keyboard dictation below (tap it, then the mic key on the keyboard).'
+              : code === 'no-speech' || code === 'no-result' ? "Didn't catch that. Tap the mic to try again, or use keyboard dictation."
+                : code === 'start-failed' ? 'Voice could not start. Tap the mic again, or use keyboard dictation.'
+                  : 'Voice error (' + code + '). Tap the mic to try again, or use keyboard dictation.';
         },
         end: () => mic.classList.remove('listening'),
-      });
+      };
+      $('#vHint').textContent = 'Starting the mic…';
+      startVoice(h);
     };
+    $('#vKbd').onclick = () => { stopListening(); vt.focus(); $('#vHint').textContent = 'Now tap the mic key on your keyboard (bottom right) and speak.'; };
     if (mic) mic.onclick = (ev) => { ev.preventDefault(); if (mic.classList.contains('listening')) stopListening(); else startListening(); };
     if (listen && SR) startListening(); else setTimeout(() => (text ? form.amount : vt).focus(), 50);
   } else {
