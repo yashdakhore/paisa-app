@@ -1,11 +1,11 @@
-import { parseEntry, isoDate } from './parser.js';
+import { parseEntry, parseMany, isoDate } from './parser.js';
 import {
   load, persist, emptyState, merge, uid, live, monthKey, inr, monthSummary, cardUsage, goalStatus, buildPlan, CARDS,
 } from './store.js';
 import * as sync from './sync.js';
 import { icon, catIcon } from './icons.js';
 
-export const VERSION = '1.3 (18 Nov 2026)';
+export const VERSION = '1.4 (18 Nov 2026)';
 
 // ---------- state ----------
 let state = load();
@@ -67,9 +67,21 @@ async function doSync() {
   }
 }
 
-function toast(msg) {
-  const t = $('#toast'); t.innerHTML = icon('check', 18) + `<span>${esc(msg)}</span>`; t.classList.remove('hidden');
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), 2600);
+function toast(msg, undo) {
+  const t = $('#toast');
+  t.innerHTML = icon('check', 18) + `<span>${esc(msg)}</span>` + (undo ? '<button type="button" class="toast-undo">Undo</button>' : '');
+  t.classList.remove('hidden');
+  if (undo) t.querySelector('.toast-undo').onclick = () => { undo(); toast('Undone'); };
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), undo ? 8000 : 2600);
+}
+
+function undoEntries(ids) {
+  commit(() => {
+    for (const id of ids) {
+      const e = state.entries.find((x) => x.id === id && !x.deleted);
+      if (e) { applyEffects(e, -1); tombstone('entries', id); }
+    }
+  });
 }
 
 // ---------- chrome ----------
@@ -529,8 +541,9 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
   openSheet(`<h3>${existing ? 'Edit entry' : 'New entry'}</h3>
     ${existing ? '' : `<div class="voice-box"><textarea id="vText" rows="2" placeholder='Say or type: "spent 250 on groceries"'>${esc(text)}</textarea>
       <button type="button" class="mic-btn" id="vMic" aria-label="${SR ? 'Speak' : 'Dictate with the keyboard'}">${icon('mic', 26)}</button></div>
-      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. Check the details below, then Save.' : 'Tap the <b>mic key on your keyboard</b> (bottom right) and say e.g. “spent 250 on groceries”. Then check the details and tap Save.'}</div>
+      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. You can say several things: “250 groceries and 120 auto”.' : 'Tap the <b>mic key on your keyboard</b> (bottom right) and say e.g. “spent 250 on groceries”. Then check the details and tap Save.'}</div>
       <button type="button" class="btn block hidden" id="vKbd" style="margin:-4px 0 16px">${icon('keyboard', 18)} Use keyboard dictation</button>`}
+    <div id="multi" class="hidden"></div>
     <form id="eform">
       <div class="grid2">
         <label class="f">Amount (₹)<input name="amount" type="number" inputmode="decimal" step="any" value="${e.amount ?? ''}" required></label>
@@ -557,9 +570,55 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
   form.type.onchange = showFields; form.categoryId.onchange = showFields; showFields();
   $('#eCancel').onclick = closeSheet;
 
+  let drafts = [];
+  const multi = $('#multi');
+  const renderMulti = () => {
+    const total = drafts.reduce((t, d) => t + (Number(d.amount) || 0), 0);
+    multi.innerHTML = `<h2 class="eyebrow" style="margin:4px 0 10px">${drafts.length} items heard</h2>` + drafts.map((d, i) => `
+      <div class="card" style="padding:14px;margin-bottom:10px">
+        <div class="row">
+          <div class="tile">${d.type === 'expense' ? catIcon(catById(d.categoryId), 20) : icon(d.type === 'income' ? 'arrowDL' : d.type === 'save' ? 'wallet' : 'trend', 20)}</div>
+          <label class="f" style="flex:1;margin:0">Amount (₹)<input data-i="${i}" data-k="amount" type="number" inputmode="decimal" value="${d.amount ?? ''}"></label>
+          <button type="button" class="icon-btn" data-rm="${i}" aria-label="Remove this item">${icon('x', 18)}</button>
+        </div>
+        ${d.type === 'expense' ? `<label class="f" style="margin:10px 0 0">Category<select data-i="${i}" data-k="categoryId">${opt(cats, d.categoryId)}</select></label>` : ''}
+        <div class="faint" style="margin-top:8px">${esc(d.note || '')} · ${new Date(d.date + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</div>
+      </div>`).join('') + `<div class="btns"><button type="button" class="btn" id="mCancel">Cancel</button><button type="button" class="btn primary" id="mSave">Save all · ${inr(total)}</button></div>`;
+    multi.querySelectorAll('[data-k]').forEach((el) => { el.onchange = el.oninput = () => { drafts[el.dataset.i][el.dataset.k] = el.value; if (el.dataset.k === 'amount') $('#mSave').textContent = `Save all · ${inr(drafts.reduce((t, d) => t + (Number(d.amount) || 0), 0))}`; }; });
+    multi.querySelectorAll('[data-rm]').forEach((el) => { el.onclick = () => { drafts.splice(Number(el.dataset.rm), 1); if (drafts.length > 1) renderMulti(); else { showSingle(); } }; });
+    $('#mCancel').onclick = closeSheet;
+    $('#mSave').onclick = () => {
+      const ids = [];
+      commit(() => {
+        for (const d of drafts) {
+          const amount = Number(d.amount);
+          if (!(amount > 0)) continue;
+          const item = { id: uid(), createdAt: new Date().toISOString(), source: $('#vText')?.value || '', type: d.type, amount, date: d.date, note: d.note,
+            categoryId: d.type === 'expense' ? d.categoryId : null, debtId: d.type === 'expense' && d.categoryId === 'debt' ? d.debtId : null,
+            goalId: d.type === 'save' ? d.goalId : null, investmentId: d.type === 'invest' ? d.investmentId : null };
+          item.applied = !!(item.debtId || item.goalId || item.investmentId);
+          applyEffects(item, +1); upsert('entries', item); ids.push(item.id);
+        }
+      });
+      if (!ids.length) { toast('Add an amount to at least one item'); return; }
+      closeSheet();
+      toast(`Saved ${ids.length} items · ${inr(drafts.reduce((t, d) => t + (Number(d.amount) || 0), 0))}`, () => undoEntries(ids));
+    };
+  };
+  const showSingle = () => { multi.classList.add('hidden'); form.classList.remove('hidden'); };
+
   const applyParse = (txt) => {
     if (!txt.trim()) return;
-    const p = parseEntry(txt, parseCtx());
+    const many = parseMany(txt, parseCtx());
+    if (many.length > 1) {
+      drafts = many.map((m) => ({ amount: m.amount, type: m.type, categoryId: m.categoryId || 'other', debtId: m.debtId, goalId: m.goalId, investmentId: m.investmentId, date: m.date, note: m.note }));
+      form.classList.add('hidden'); multi.classList.remove('hidden');
+      renderMulti();
+      $('#vHint').textContent = 'Check each item, then tap Save all.';
+      return;
+    }
+    showSingle();
+    const p = many[0];
     if (p.amount !== null) form.amount.value = p.amount;
     form.date.value = p.date;
     form.type.value = p.type;
@@ -638,7 +697,8 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
       upsert('entries', item);
     });
     closeSheet();
-    toast(`Saved ${inr(amount)}${item.categoryId ? ' · ' + (catById(item.categoryId)?.name || '') : ''}`);
+    const savedMsg = `Saved ${inr(amount)}${item.categoryId ? ' · ' + (catById(item.categoryId)?.name || '') : ''}`;
+    if (existing) toast(savedMsg); else toast(savedMsg, () => undoEntries([item.id]));
   };
 }
 

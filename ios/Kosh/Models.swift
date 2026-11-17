@@ -102,6 +102,23 @@ struct Investment: Syncable, Hashable {
     var deleted: Bool?
 }
 
+/// A monthly repeating entry (rent, recharge, SIP...). Kosh offers to add it each month on `day`.
+struct Recurring: Syncable, Hashable {
+    var id: String
+    var note: String
+    var type: String
+    var amount: Double
+    var categoryId: String?
+    var debtId: String?
+    var goalId: String?
+    var investmentId: String?
+    var day: Double
+    var active: Bool?
+    var lastAdded: String?      // YYYY-MM it was last added or skipped
+    var updatedAt: Double?
+    var deleted: Bool?
+}
+
 struct AppData: Codable {
     var settings = AppSettings(salary: nil, rule: nil, updatedAt: 0)
     var categories: [Category] = []
@@ -109,6 +126,7 @@ struct AppData: Codable {
     var investments: [Investment] = []
     var goals: [Goal] = []
     var debts: [Debt] = []
+    var recurring: [Recurring] = []
 
     init() {}
 
@@ -120,6 +138,7 @@ struct AppData: Codable {
         investments = try c.decodeIfPresent([Investment].self, forKey: .investments) ?? []
         goals = try c.decodeIfPresent([Goal].self, forKey: .goals) ?? []
         debts = try c.decodeIfPresent([Debt].self, forKey: .debts) ?? []
+        recurring = try c.decodeIfPresent([Recurring].self, forKey: .recurring) ?? []
     }
 
     static let defaultCategories: [(String, String)] = [
@@ -158,6 +177,7 @@ struct AppData: Codable {
         out.investments = m(a.investments, b.investments)
         out.goals = m(a.goals, b.goals)
         out.debts = m(a.debts, b.debts)
+        out.recurring = m(a.recurring, b.recurring)
         return out
     }
 }

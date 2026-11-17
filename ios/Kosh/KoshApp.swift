@@ -5,12 +5,14 @@ import SwiftUI
 struct KoshApp: App {
     @State private var store = KoshStore()
     @State private var router = Router()
+    @State private var lock = AppLock()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(store)
                 .environment(router)
+                .environment(lock)
                 .preferredColorScheme(.dark)
                 .tint(K.brand)
         }
@@ -27,6 +29,9 @@ enum SheetRoute: Identifiable {
     case debt(Debt?)
     case investment(Investment?)
     case income
+    case recurring(Recurring?)
+    case recurringList
+    case categoryDetail(Category)
 
     var id: String {
         switch self {
@@ -36,6 +41,9 @@ enum SheetRoute: Identifiable {
         case .debt(let d): return "debt-\(d?.id ?? "new")"
         case .investment(let i): return "inv-\(i?.id ?? "new")"
         case .income: return "income"
+        case .recurring(let r): return "rec-\(r?.id ?? "new")"
+        case .recurringList: return "recurring-list"
+        case .categoryDetail(let c): return "catdetail-\(c.id)"
         }
     }
 }
@@ -47,12 +55,18 @@ final class Router {
     var month: String = monthKey(Date())
     var sheet: SheetRoute?
     var toast: String?
+    var toastUndo: (() -> Void)?
+    private var toastSerial = 0
 
     func newEntry(listen: Bool = true, text: String = "") { sheet = .entry(nil, listen: listen, text: text) }
-    func show(_ message: String) {
+    func show(_ message: String, undo: (() -> Void)? = nil) {
         toast = message
-        let m = message
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { if self.toast == m { self.toast = nil } }
+        toastUndo = undo
+        toastSerial += 1
+        let serial = toastSerial
+        DispatchQueue.main.asyncAfter(deadline: .now() + (undo == nil ? 2.4 : 8)) {
+            if self.toastSerial == serial { self.toast = nil; self.toastUndo = nil }
+        }
     }
 }
 
@@ -67,6 +81,8 @@ struct RootView: View {
     @Environment(KoshStore.self) private var store
     @Environment(Router.self) private var router
     @State private var pending = PendingEntry.shared
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(AppLock.self) private var lock
 
     var body: some View {
         @Bindable var router = router
@@ -98,12 +114,26 @@ struct RootView: View {
             if let t = router.toast {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(K.good)
-                    Text(t).font(.system(size: 14))
+                    Text(t).font(.system(size: 14)).lineLimit(2)
+                    if let undo = router.toastUndo {
+                        Button {
+                            undo()
+                            router.show("Undone")
+                        } label: {
+                            Text("Undo").font(.system(size: 14, weight: .semibold)).foregroundStyle(K.brand)
+                                .padding(.horizontal, 10).frame(minHeight: 36)
+                        }
+                    }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .padding(.horizontal, 16).padding(.vertical, 10)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.bottom, 110)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .overlay {
+            if lock.enabled && (lock.locked || scenePhase != .active) {
+                LockScreen().transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.25), value: router.toast)
@@ -116,6 +146,9 @@ struct RootView: View {
                 case .debt(let d): DebtForm(existing: d)
                 case .investment(let i): InvestmentForm(existing: i)
                 case .income: IncomeForm()
+                case .recurring(let r): RecurringForm(existing: r)
+                case .recurringList: RecurringList()
+                case .categoryDetail(let c): CategoryDetail(category: c)
                 }
             }
             .environment(store)
@@ -126,6 +159,18 @@ struct RootView: View {
         }
         .onChange(of: pending.text) { _, new in
             if let t = new, !t.isEmpty { router.newEntry(listen: false, text: t); pending.text = nil }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "kosh" else { return }
+            router.tab = .home
+            if url.host == "add" { router.newEntry(listen: true) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                Reminders.reschedule(store.data)
+                if lock.enabled { router.sheet = nil; lock.lockNow() }
+            }
+            if phase == .active { lock.unlock() }
         }
         .onAppear {
             if let t = pending.text, !t.isEmpty { router.newEntry(listen: false, text: t); pending.text = nil }

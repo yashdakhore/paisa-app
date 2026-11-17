@@ -4,15 +4,15 @@ import Foundation
 /// A Swift port of the web app's parser.js; both are tested against the same phrases.
 enum Parser {
     static let defaultKeywords: [String: [String]] = [
-        "rent": ["rent", "house rent", "room rent", "landlord", "pg"],
-        "bills": ["electricity", "electric", "light bill", "current bill", "power bill", "bill", "water bill", "gas", "cylinder", "lpg", "maintenance"],
-        "groceries": ["grocery", "groceries", "vegetables", "veggies", "sabzi", "fruits", "milk", "kirana", "dmart", "d mart", "blinkit", "zepto", "bigbasket", "big basket", "instamart", "ration", "eggs", "bread"],
-        "food": ["food", "lunch", "dinner", "breakfast", "snacks", "tea", "chai", "coffee", "swiggy", "zomato", "restaurant", "cafe", "pizza", "burger", "biryani", "dining", "eating out", "canteen", "mess", "tiffin"],
-        "transport": ["uber", "ola", "rapido", "auto", "rickshaw", "cab", "taxi", "bus", "metro", "train", "petrol", "diesel", "fuel", "parking", "toll", "travel", "flight", "ticket", "tickets"],
+        "rent": ["rent", "house rent", "room rent", "landlord", "pg", "kiraya", "kiraaya", "bhada"],
+        "bills": ["electricity", "electric", "light bill", "current bill", "power bill", "bill", "water bill", "gas", "cylinder", "lpg", "maintenance", "bijli", "bijlee", "paani", "pani"],
+        "groceries": ["grocery", "groceries", "vegetables", "veggies", "sabzi", "fruits", "milk", "kirana", "dmart", "d mart", "blinkit", "zepto", "bigbasket", "big basket", "instamart", "ration", "eggs", "bread", "sabji", "doodh", "dudh", "anda", "ande", "atta", "chawal", "dal", "tarkari", "fal", "kirana store"],
+        "food": ["food", "lunch", "dinner", "breakfast", "snacks", "tea", "chai", "coffee", "swiggy", "zomato", "restaurant", "cafe", "pizza", "burger", "biryani", "dining", "eating out", "canteen", "mess", "tiffin", "khana", "nashta", "samosa", "thali", "dhaba", "chaat"],
+        "transport": ["uber", "ola", "rapido", "auto", "rickshaw", "cab", "taxi", "bus", "metro", "train", "petrol", "diesel", "fuel", "parking", "toll", "travel", "flight", "ticket", "tickets", "gaadi", "bike"],
         "phone": ["recharge", "mobile", "phone", "jio", "airtel", "vodafone", "internet", "wifi", "wi-fi", "broadband", "data pack"],
-        "shopping": ["shopping", "clothes", "shoes", "amazon", "flipkart", "myntra", "meesho", "ajio", "shirt", "dress", "gadget"],
-        "health": ["medicine", "medicines", "doctor", "pharmacy", "chemist", "hospital", "medical", "clinic", "gym", "tablets", "apollo", "pharmeasy"],
-        "entertainment": ["movie", "movies", "netflix", "prime", "hotstar", "spotify", "youtube premium", "game", "games", "outing", "party", "concert", "subscription"],
+        "shopping": ["shopping", "clothes", "shoes", "amazon", "flipkart", "myntra", "meesho", "ajio", "shirt", "dress", "gadget", "kapde", "kapda", "joote"],
+        "health": ["medicine", "medicines", "doctor", "pharmacy", "chemist", "hospital", "medical", "clinic", "gym", "tablets", "apollo", "pharmeasy", "dawai", "dawa", "davai", "dava"],
+        "entertainment": ["movie", "movies", "netflix", "prime", "hotstar", "spotify", "youtube premium", "game", "games", "outing", "party", "concert", "subscription", "picture"],
         "debt": ["credit card", "card bill", "card payment", "card", "sbi card", "emi", "loan", "mpokket", "repay", "repaid", "repayment"],
         "other": [],
     ]
@@ -22,8 +22,8 @@ enum Parser {
     static let days = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
     static let ones: [String: Double] = ["zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19]
     static let tens: [String: Double] = ["twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90]
-    static let scales: [String: Double] = ["hundred": 100, "thousand": 1000, "lakh": 100_000, "lakhs": 100_000, "lac": 100_000]
-    static let filler: Set<String> = ["spent", "spend", "spending", "paid", "pay", "paying", "bought", "buy", "gave", "give", "for", "on", "at", "in", "to", "of", "rupees", "rupee", "rs", "inr", "bucks", "the", "a", "an", "i", "my", "just", "and", "towards", "toward", "worth", "got", "ordered", "from", "today", "yesterday", "received", "invested", "invest", "saved", "save", "put", "added", "add", "into", "with", "by", "was", "is", "me"]
+    static let scales: [String: Double] = ["hundred": 100, "thousand": 1000, "lakh": 100_000, "lakhs": 100_000, "lac": 100_000, "sau": 100, "hazaar": 1000, "hazar": 1000, "hajar": 1000]
+    static let filler: Set<String> = ["spent", "spend", "spending", "paid", "pay", "paying", "bought", "buy", "gave", "give", "for", "on", "at", "in", "to", "of", "rupees", "rupee", "rs", "inr", "bucks", "the", "a", "an", "i", "my", "just", "and", "towards", "toward", "worth", "got", "ordered", "from", "today", "yesterday", "received", "invested", "invest", "saved", "save", "put", "added", "add", "into", "with", "by", "was", "is", "me", "ke", "liye", "pe", "par", "mein", "ka", "ki", "ko", "se", "diye", "diya", "kharcha", "kharch", "kiya", "kiye", "rupaye", "rupay", "rupiya", "hai", "tha", "aaj", "kal", "parso", "parson", "wala", "wale"]
 
     struct Item {
         let id: String
@@ -159,6 +159,9 @@ enum Parser {
         let today = cal.startOfDay(for: now)
         let tries: [(String, ([String]) -> Date?)] = [
             ("\\bday before yesterday\\b", { _ in addDays(today, -2) }),
+            ("\\bparso[n]?\\b", { _ in addDays(today, -2) }),
+            ("\\bkal\\b", { _ in addDays(today, -1) }),
+            ("\\baaj\\b", { _ in today }),
             ("\\byesterday\\b", { _ in addDays(today, -1) }),
             ("\\b(today|tonight|this morning|this evening)\\b", { _ in today }),
             ("\\b(\\d{1,2}) days? ago\\b", { g in addDays(today, -(Int(g[1]) ?? 0)) }),
@@ -197,7 +200,7 @@ enum Parser {
     // MARK: - amount
 
     static func extractAmount(_ text: String) -> (amount: Double?, rest: String) {
-        let pattern = "(₹|\\brs\\.?|\\binr)?\\s*(\\d+(?:\\.\\d+)?)\\s*(k\\b|thousand\\b|lakhs?\\b|lac\\b|hundred\\b)?\\s*(rupees?\\b|rs\\b|bucks\\b|/-)?"
+        let pattern = "(₹|\\brs\\.?|\\binr)?\\s*(\\d+(?:\\.\\d+)?)\\s*(k\\b|thousand\\b|lakhs?\\b|lac\\b|hundred\\b)?\\s*(rupees?\\b|rupaye\\b|rupay\\b|rupiya\\b|rs\\b|bucks\\b|/-)?"
         guard let re = try? NSRegularExpression(pattern: pattern) else { return (nil, text) }
         let ns = text as NSString
         struct Cand { let v: Double; let marked: Bool; let range: NSRange }
@@ -240,6 +243,43 @@ enum Parser {
 
     static func nameWords(_ name: String) -> [String] {
         [name] + name.components(separatedBy: CharacterSet.letters.inverted).filter { $0.count > 3 }
+    }
+
+    // MARK: - several items in one sentence
+
+    static func normalize(_ input: String) -> String {
+        var t = " " + input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() + " "
+        if let re = try? NSRegularExpression(pattern: "(\\d),(?=\\d)") {
+            t = re.stringByReplacingMatches(in: t, range: NSRange(location: 0, length: (t as NSString).length), withTemplate: "$1")
+        }
+        return wordsToDigits(t)
+    }
+
+    /// "250 on groceries and 120 auto yesterday" -> ["250 on groceries", "120 auto yesterday"].
+    /// A piece only counts as its own item if it still has a number once dates are taken out.
+    static func splitItems(_ input: String) -> [String] {
+        let t = normalize(input)
+        guard let re = try? NSRegularExpression(pattern: "\\s*(?:,|;|&|\\band\\b|\\bplus\\b|\\baur\\b|\\bthen\\b)\\s*") else { return [input] }
+        let marked = re.stringByReplacingMatches(in: t, range: NSRange(location: 0, length: (t as NSString).length), withTemplate: "\u{1}")
+        let hasAmount = { (seg: String) -> Bool in extractDate(" " + seg + " ", now: Date()).rest.contains(where: \.isNumber) }
+        var groups: [String] = []
+        for raw in marked.components(separatedBy: "\u{1}") {
+            let seg = raw.trimmingCharacters(in: .whitespaces)
+            if seg.isEmpty { continue }
+            if hasAmount(seg) || groups.isEmpty { groups.append(seg) } else { groups[groups.count - 1] += " " + seg }
+        }
+        if groups.count > 1, !hasAmount(groups[0]) { groups[1] = groups[0] + " " + groups[1]; groups.removeFirst() }
+        return groups.isEmpty ? [input] : groups
+    }
+
+    static func parseMany(_ input: String, categories: [Item], debts: [Item], goals: [Item], investments: [Item], now: Date = Date()) -> [Result] {
+        let parts = splitItems(input)
+        if parts.count <= 1 { return [parse(input, categories: categories, debts: debts, goals: goals, investments: investments, now: now)] }
+        var rs = parts.map { parse($0, categories: categories, debts: debts, goals: goals, investments: investments, now: now) }
+        if let dated = rs.first(where: { $0.sureDate }) {
+            for i in rs.indices where !rs[i].sureDate { rs[i].date = dated.date }
+        }
+        return rs
     }
 
     // MARK: - main

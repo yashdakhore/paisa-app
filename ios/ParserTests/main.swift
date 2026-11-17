@@ -56,5 +56,26 @@ r = p("spent 70 on stationery"); eq(r.categoryId, "other", "other"); eq(r.note, 
 eq(Parser.wordsToDigits("two hundred and fifty rupees"), "250 rupees", "w2d 1")
 eq(Parser.wordsToDigits("one lakh twenty thousand"), "120000", "w2d 2")
 
+// Hinglish
+r = p("kiraya 9000 diya"); eq(r.categoryId, "rent", "kiraya"); eq(r.amount, 9000, "kiraya amt")
+r = p("bijli ka bill 750"); eq(r.categoryId, "bills", "bijli")
+r = p("sabzi 120 kal"); eq(r.categoryId, "groceries", "sabzi"); eq(r.date, "2026-11-17", "kal")
+r = p("dawai 300 parso"); eq(r.categoryId, "health", "dawai"); eq(r.date, "2026-11-16", "parso")
+r = p("doodh 60 rupaye aaj"); eq(r.amount, 60, "rupaye"); eq(r.categoryId, "groceries", "doodh"); eq(r.date, "2026-11-18", "aaj")
+eq(p("5 sau ka khana").amount, 500, "5 sau")
+eq(p("2 hazaar ke kapde").amount, 2000, "2 hazaar"); eq(p("2 hazaar ke kapde").categoryId, "shopping", "kapde")
+
+// several items
+func pm(_ s: String) -> [Parser.Result] { Parser.parseMany(s, categories: cats, debts: debts, goals: goals, investments: invs, now: now) }
+var m = pm("250 groceries and 120 auto")
+eq(m.count, 2, "two items"); eq(m[0].amount, 250, "m0"); eq(m[0].categoryId, "groceries", "m0c"); eq(m[1].amount, 120, "m1"); eq(m[1].categoryId, "transport", "m1c")
+m = pm("spent 250 on groceries, 120 on auto and 60 chai yesterday")
+eq(m.count, 3, "three items"); eq(m.map(\.date), ["2026-11-17", "2026-11-17", "2026-11-17"], "shared date"); eq(m[2].categoryId, "food", "chai")
+m = pm("paid 9,000 rent aur 750 bijli")
+eq(m.count, 2, "aur"); eq(m[0].amount, 9000, "aur0"); eq(m[1].categoryId, "bills", "aur1")
+eq(pm("two hundred and fifty on vegetables").count, 1, "and inside number")
+eq(pm("500 medicine on 5th november").count, 1, "date not an item")
+eq(pm("bread and butter 80").count, 1, "and without 2 amounts")
+
 print(failures == 0 ? "PASS: all \(checks) checks" : "\(failures) of \(checks) checks FAILED")
 exit(failures == 0 ? 0 : 1)

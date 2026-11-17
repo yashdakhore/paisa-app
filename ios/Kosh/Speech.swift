@@ -87,10 +87,10 @@ final class SpeechRecognizer {
                     if let result {
                         self.transcript = result.bestTranscription.formattedString
                         if result.isFinal { self.finish(); return }
-                        self.armSilenceTimer(seconds: 1.6)
+                        self.armSilenceTimer(seconds: 2.2)
                     } else if let error {
                         // On-device recognition failed straight away: retry once with Apple's speech service.
-                        if onDeviceNow, self.transcript.isEmpty, Date().timeIntervalSince(self.startedAt) < 2 {
+                        if onDeviceNow, self.transcript.isEmpty, !self.forceServer {
                             self.forceServer = true
                             self.begin()
                             return

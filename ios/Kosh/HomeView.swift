@@ -58,6 +58,8 @@ struct HomeView: View {
                 quick("target", "Plan") { router.tab = .plan; router.planSeg = .month }
             }
 
+            DueRecurringCard()
+
             CardUsageCard(showLink: true)
 
             let due = d.liveDebts.filter { ($0.dueDay ?? 0) > 0 && ($0.balance ?? 0) > 0 }

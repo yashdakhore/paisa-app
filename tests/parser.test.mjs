@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseEntry, wordsToDigits } from '../docs/parser.js';
+import { parseEntry, wordsToDigits, parseMany } from '../docs/parser.js';
 
 const now = new Date(2026, 10, 18); // Wed 18 Nov 2026
 const ctx = {
@@ -64,4 +64,26 @@ test('unknown category falls back to other', () => {
 test('wordsToDigits', () => {
   assert.equal(wordsToDigits('two hundred and fifty rupees'), '250 rupees');
   assert.equal(wordsToDigits('one lakh twenty thousand'), '120000');
+});
+
+test('hinglish', () => {
+  let r = p('kiraya 9000 diya'); assert.equal(r.categoryId, 'rent'); assert.equal(r.amount, 9000);
+  assert.equal(p('bijli ka bill 750').categoryId, 'bills');
+  r = p('sabzi 120 kal'); assert.equal(r.categoryId, 'groceries'); assert.equal(r.date, '2026-11-17');
+  r = p('dawai 300 parso'); assert.equal(r.categoryId, 'health'); assert.equal(r.date, '2026-11-16');
+  r = p('doodh 60 rupaye aaj'); assert.equal(r.amount, 60); assert.equal(r.categoryId, 'groceries');
+  assert.equal(p('5 sau ka khana').amount, 500);
+  assert.equal(p('2 hazaar ke kapde').amount, 2000); assert.equal(p('2 hazaar ke kapde').categoryId, 'shopping');
+});
+
+test('several items', () => {
+  const pm = (s) => parseMany(s, ctx, now);
+  let m = pm('250 groceries and 120 auto');
+  assert.equal(m.length, 2); assert.equal(m[0].categoryId, 'groceries'); assert.equal(m[1].amount, 120); assert.equal(m[1].categoryId, 'transport');
+  m = pm('spent 250 on groceries, 120 on auto and 60 chai yesterday');
+  assert.equal(m.length, 3); assert.deepEqual(m.map((x) => x.date), ['2026-11-17', '2026-11-17', '2026-11-17']); assert.equal(m[2].categoryId, 'food');
+  m = pm('paid 9,000 rent aur 750 bijli'); assert.equal(m.length, 2); assert.equal(m[0].amount, 9000); assert.equal(m[1].categoryId, 'bills');
+  assert.equal(pm('two hundred and fifty on vegetables').length, 1);
+  assert.equal(pm('500 medicine on 5th november').length, 1);
+  assert.equal(pm('bread and butter 80').length, 1);
 });

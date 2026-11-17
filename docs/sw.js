@@ -1,5 +1,5 @@
 // Offline support: serve the app from cache when there is no network; fetch fresh copies when online.
-const CACHE = 'kosh-v5';
+const CACHE = 'kosh-v6';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'parser.js', 'store.js', 'sync.js', 'icons.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

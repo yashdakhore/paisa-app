@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct BudgetView: View {
+struct BudgetMain: View {
     @Environment(KoshStore.self) private var store
     @Environment(Router.self) private var router
 
@@ -35,7 +35,7 @@ struct BudgetView: View {
                     if i > 0 { RowDivider() }
                     let s = ms.byCat[c.id] ?? 0
                     let b = c.budget ?? 0
-                    Button { router.sheet = .category(c) } label: {
+                    Button { router.sheet = .categoryDetail(c) } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Tile(symbol: categorySymbol(c.id))
                             VStack(alignment: .leading, spacing: 0) {
@@ -211,6 +211,12 @@ struct DebtsList: View {
         let d = store.data
         VStack(spacing: 12) {
             if let rule = d.settings.rule, !rule.isEmpty { Banner(symbol: "shield", text: rule) }
+            if let missing = d.liveDebts.first(where: { ($0.dueDay ?? 0) < 1 && ($0.balance ?? 0) > 0 }) {
+                Button { router.sheet = .debt(missing) } label: {
+                    Banner(symbol: "bell.badge", text: "Add the due date for \(missing.name) so Kosh can remind you 3 days and 1 day before. Tap to add it.")
+                }
+                .buttonStyle(.plain)
+            }
             CardUsageCard(showLink: false)
             ForEach(d.liveDebts) { debt in
                 let usage: Double? = debt.kind == "card" && (debt.limit ?? 0) > 0 ? (debt.balance ?? 0) / (debt.limit ?? 1) : nil

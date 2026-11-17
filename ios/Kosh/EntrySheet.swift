@@ -1,5 +1,18 @@
 import SwiftUI
 
+/// One item heard in a sentence like "250 groceries and 120 auto".
+struct Draft: Identifiable, Equatable {
+    let id = UUID()
+    var amount: String
+    var type: String
+    var categoryId: String
+    var debtId: String?
+    var goalId: String?
+    var investmentId: String?
+    var date: String
+    var note: String
+}
+
 /// Add or edit an entry. New entries start listening right away when opened from the mic.
 struct EntrySheet: View {
     @Environment(KoshStore.self) private var store
@@ -21,9 +34,11 @@ struct EntrySheet: View {
     @State private var investmentId = ""
     @State private var note = ""
     @State private var reduceDebt = true
+    @State private var repeatMonthly = false
     @State private var unsureAmount = false
     @State private var unsureCategory = false
-    @State private var hint = "Tap the mic and speak, or type. Check the details, then Save."
+    @State private var drafts: [Draft] = []
+    @State private var hint = "Tap the mic and speak, or type. You can say several things: “250 groceries and 120 auto”."
     @State private var confirmDelete = false
     @State private var pulse = false
     @FocusState private var focused: Bool
@@ -31,90 +46,42 @@ struct EntrySheet: View {
     var body: some View {
         let d = store.data
         NavigationStack {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(existing == nil ? "New entry" : "Edit entry").font(.system(size: 22, weight: .semibold, design: .rounded)).padding(.top, 8)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(existing == nil ? "New entry" : "Edit entry").font(.system(size: 22, weight: .semibold, design: .rounded)).padding(.top, 8)
 
-                if existing == nil {
-                    HStack(alignment: .top, spacing: 12) {
-                        TextField("Say or type: “spent 250 on groceries”", text: $text, axis: .vertical)
-                            .lineLimit(2...4)
-                            .font(.system(size: 17))
-                            .focused($focused)
-                            .padding(14)
-                            .frame(minHeight: 64, alignment: .topLeading)
-                            .background(K.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(speech.isListening ? K.brand : K.lineStrong))
-                        micButton
-                    }
-                    Text(speech.errorMessage ?? hint).font(.system(size: 13)).foregroundStyle(speech.errorMessage == nil ? K.muted : K.warn)
-                }
-
-                HStack(alignment: .top, spacing: 12) {
-                    field("Amount (₹)", unsure: unsureAmount) {
-                        TextField("0", text: $amount).keyboardType(.decimalPad).font(.num(18, .semibold))
-                    }
-                    field("Date") {
-                        DatePicker("", selection: $date, displayedComponents: .date).labelsHidden()
-                    }
-                }
-
-                field("Type") {
-                    Picker("Type", selection: $type) { ForEach(EntryType.allCases) { Text($0.label).tag($0) } }
-                }
-
-                if type == .expense {
-                    field("Category", unsure: unsureCategory) {
-                        Picker("Category", selection: $categoryId) { ForEach(d.liveCategories) { Text($0.name).tag($0.id) } }
-                    }
-                    if categoryId == "debt" {
-                        field("Which card/loan?") {
-                            Picker("Debt", selection: $debtId) {
-                                Text("— not linked —").tag("")
-                                ForEach(d.liveDebts) { Text($0.name).tag($0.id) }
-                            }
+                    if existing == nil {
+                        HStack(alignment: .top, spacing: 12) {
+                            TextField("Say or type: “spent 250 on groceries”", text: $text, axis: .vertical)
+                                .lineLimit(2...4)
+                                .font(.system(size: 17))
+                                .focused($focused)
+                                .padding(14)
+                                .frame(minHeight: 64, alignment: .topLeading)
+                                .background(K.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(speech.isListening ? K.brand : K.lineStrong))
+                            micButton
                         }
-                        if existing == nil { Toggle("Also lower that balance", isOn: $reduceDebt).tint(K.brand).padding(.horizontal, 4) }
+                        Text(speech.errorMessage ?? (speech.isListening ? "Listening… pause when you're done." : hint))
+                            .font(.system(size: 13)).foregroundStyle(speech.errorMessage == nil ? K.muted : K.warn)
                     }
-                }
-                if type == .save {
-                    field("Goal") {
-                        Picker("Goal", selection: $goalId) {
-                            Text("— choose —").tag("")
-                            ForEach(d.liveGoals.filter { $0.kind == "save" }) { Text($0.name).tag($0.id) }
-                        }
-                    }
-                }
-                if type == .invest {
-                    field("Investment") {
-                        Picker("Investment", selection: $investmentId) {
-                            Text("— choose —").tag("")
-                            ForEach(d.liveInvestments) { Text($0.name).tag($0.id) }
-                        }
-                    }
-                }
-                field("Note") { TextField("optional", text: $note) }
 
-                HStack(spacing: 10) {
-                    Button("Cancel") { speech.cancel(); dismiss() }.buttonStyle(SecondaryButton())
-                    Button("Save", action: saveEntry).buttonStyle(PrimaryButton())
+                    if drafts.count > 1 {
+                        multiItems(d)
+                    } else {
+                        singleItem(d)
+                    }
                 }
-                .padding(.top, 6)
-                if existing != nil {
-                    Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
-                        .buttonStyle(SecondaryButton(destructive: true))
+                .padding(20)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { hideKeyboard() }.bold()
                 }
             }
-            .padding(20)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .toolbar(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { hideKeyboard() }.bold()
-            }
-        }
         }
         .tint(K.brand)
         .confirmationDialog("Delete this entry?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -131,6 +98,112 @@ struct EntrySheet: View {
         }
         .onChange(of: text) { _, t in applyParse(t) }
     }
+
+    // MARK: - single item
+
+    @ViewBuilder
+    private func singleItem(_ d: AppData) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            field("Amount (₹)", unsure: unsureAmount) {
+                TextField("0", text: $amount).keyboardType(.decimalPad).font(.num(18, .semibold))
+            }
+            field("Date") {
+                DatePicker("", selection: $date, displayedComponents: .date).labelsHidden()
+            }
+        }
+        field("Type") {
+            Picker("Type", selection: $type) { ForEach(EntryType.allCases) { Text($0.label).tag($0) } }
+        }
+        if type == .expense {
+            field("Category", unsure: unsureCategory) {
+                Picker("Category", selection: $categoryId) { ForEach(d.liveCategories) { Text($0.name).tag($0.id) } }
+            }
+            if categoryId == "debt" {
+                field("Which card/loan?") {
+                    Picker("Debt", selection: $debtId) {
+                        Text("— not linked —").tag("")
+                        ForEach(d.liveDebts) { Text($0.name).tag($0.id) }
+                    }
+                }
+                if existing == nil { Toggle("Also lower that balance", isOn: $reduceDebt).tint(K.brand).padding(.horizontal, 4) }
+            }
+        }
+        if type == .save {
+            field("Goal") {
+                Picker("Goal", selection: $goalId) {
+                    Text("— choose —").tag("")
+                    ForEach(d.liveGoals.filter { $0.kind == "save" }) { Text($0.name).tag($0.id) }
+                }
+            }
+        }
+        if type == .invest {
+            field("Investment") {
+                Picker("Investment", selection: $investmentId) {
+                    Text("— choose —").tag("")
+                    ForEach(d.liveInvestments) { Text($0.name).tag($0.id) }
+                }
+            }
+        }
+        field("Note") { TextField("optional", text: $note) }
+        if existing == nil {
+            Toggle(isOn: $repeatMonthly) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Repeat every month")
+                    Text("Kosh will offer to add it on day \(Parser.cal.component(.day, from: date)) each month.").font(.system(size: 12)).foregroundStyle(K.muted)
+                }
+            }
+            .tint(K.brand).padding(.horizontal, 4)
+        }
+
+        HStack(spacing: 10) {
+            Button("Cancel") { speech.cancel(); dismiss() }.buttonStyle(SecondaryButton())
+            Button("Save", action: saveSingle).buttonStyle(PrimaryButton())
+        }
+        .padding(.top, 6)
+        if existing != nil {
+            Button(role: .destructive) { confirmDelete = true } label: { Label("Delete", systemImage: "trash") }
+                .buttonStyle(SecondaryButton(destructive: true))
+        }
+    }
+
+    // MARK: - several items
+
+    @ViewBuilder
+    private func multiItems(_ d: AppData) -> some View {
+        Eyebrow(text: "\(drafts.count) items heard").padding(.top, 4)
+        ForEach($drafts) { $draft in
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: draft.type == "income" ? "arrow.down.left" : categorySymbol(draft.categoryId))
+                        .foregroundStyle(K.brand2).frame(width: 36, height: 36)
+                        .background(K.surface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    TextField("0", text: $draft.amount).keyboardType(.decimalPad).font(.num(18, .semibold)).frame(maxWidth: 110)
+                    Spacer()
+                    Text(shortDate(draft.date)).font(.system(size: 13)).foregroundStyle(K.muted)
+                    Button { drafts.removeAll { $0.id == draft.id } } label: {
+                        Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundStyle(K.faint)
+                    }
+                    .accessibilityLabel("Remove this item")
+                }
+                if draft.type == "expense" {
+                    Picker("Category", selection: $draft.categoryId) { ForEach(d.liveCategories) { Text($0.name).tag($0.id) } }
+                        .pickerStyle(.menu)
+                }
+                TextField("Note", text: $draft.note).font(.system(size: 14)).foregroundStyle(K.muted)
+            }
+            .padding(14)
+            .background(K.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(K.lineStrong))
+        }
+        let total = drafts.compactMap { Double($0.amount) }.reduce(0, +)
+        HStack(spacing: 10) {
+            Button("Cancel") { speech.cancel(); dismiss() }.buttonStyle(SecondaryButton())
+            Button("Save all · \(inr(total))", action: saveAll).buttonStyle(PrimaryButton())
+        }
+        .padding(.top, 6)
+    }
+
+    // MARK: - pieces
 
     private var micButton: some View {
         Button { speech.toggle() } label: {
@@ -164,14 +237,17 @@ struct EntrySheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    // MARK: - logic
+
     private func setup() {
         speech.onFinish = { t in
             text = t
             applyParse(t)
-            hint = unsureAmount ? "Couldn't hear an amount. Type it in below." : "Check the details, then tap Save. Orange boxes are guesses."
+            if drafts.count > 1 { hint = "Check each item, then tap Save all." }
+            else { hint = unsureAmount ? "Couldn't hear an amount. Type it in below." : "Check the details, then tap Save. Orange boxes are guesses." }
         }
         if let e = existing {
-            amount = e.amount == e.amount.rounded() ? String(Int(e.amount)) : String(e.amount)
+            amount = fmtAmount(e.amount)
             date = isoDate(e.date) ?? Date()
             type = EntryType(rawValue: e.type) ?? .expense
             categoryId = e.categoryId ?? "other"
@@ -187,8 +263,17 @@ struct EntrySheet: View {
 
     private func applyParse(_ t: String) {
         guard existing == nil, !t.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let p = store.parse(t)
-        if let a = p.amount { amount = a == a.rounded() ? String(Int(a)) : String(a) }
+        let results = store.parseMany(t)
+        if results.count > 1 {
+            drafts = results.map { p in
+                Draft(amount: p.amount.map(fmtAmount) ?? "", type: p.type, categoryId: p.categoryId ?? "other", debtId: p.debtId,
+                      goalId: p.goalId, investmentId: p.investmentId, date: p.date, note: p.note)
+            }
+            return
+        }
+        drafts = []
+        let p = results[0]
+        if let a = p.amount { amount = fmtAmount(a) }
         date = isoDate(p.date) ?? date
         type = EntryType(rawValue: p.type) ?? .expense
         if let c = p.categoryId { categoryId = c }
@@ -200,7 +285,7 @@ struct EntrySheet: View {
         unsureCategory = p.type == "expense" && !p.sureCategory
     }
 
-    private func saveEntry() {
+    private func saveSingle() {
         guard let amt = Double(amount.replacingOccurrences(of: ",", with: "")), amt > 0 else {
             hint = "Enter an amount."
             unsureAmount = true
@@ -220,11 +305,43 @@ struct EntrySheet: View {
             e.applied = type == .expense ? (e.debtId != nil && reduceDebt) : (e.goalId != nil || e.investmentId != nil)
         }
         store.saveEntry(e, previous: existing)
+        if existing == nil, repeatMonthly { store.makeRecurring(from: e) }
         let catName = type == .expense ? (store.data.category(categoryId)?.name ?? "") : type.label
-        router.show("Saved \(inr(amt)) · \(catName)")
+        if existing == nil {
+            let id = e.id
+            let s = store
+            router.show("Saved \(inr(amt)) · \(catName)" + (repeatMonthly ? " · repeats monthly" : "")) { s.deleteEntries([id]) }
+        } else {
+            router.show("Updated \(inr(amt))")
+        }
+        dismiss()
+    }
+
+    private func saveAll() {
+        speech.cancel()
+        var ids: [String] = []
+        var total = 0.0
+        for dr in drafts {
+            guard let amt = Double(dr.amount.replacingOccurrences(of: ",", with: "")), amt > 0 else { continue }
+            var e = Entry(id: newId(), type: dr.type, amount: amt, date: dr.date, note: dr.note,
+                          categoryId: dr.type == "expense" ? dr.categoryId : nil,
+                          debtId: dr.type == "expense" && dr.categoryId == "debt" ? dr.debtId : nil,
+                          goalId: dr.type == "save" ? dr.goalId : nil,
+                          investmentId: dr.type == "invest" ? dr.investmentId : nil,
+                          createdAt: ISO8601DateFormatter().string(from: Date()), source: text)
+            e.applied = e.debtId != nil || e.goalId != nil || e.investmentId != nil
+            store.saveEntry(e, previous: nil)
+            ids.append(e.id)
+            total += amt
+        }
+        guard !ids.isEmpty else { hint = "Add an amount to at least one item."; return }
+        let s = store
+        router.show("Saved \(ids.count) items · \(inr(total))") { s.deleteEntries(ids) }
         dismiss()
     }
 }
+
+func fmtAmount(_ a: Double) -> String { a == a.rounded() ? String(Int(a)) : String(a) }
 
 func hideKeyboard() {
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)

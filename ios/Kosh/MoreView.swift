@@ -8,6 +8,8 @@ struct MoreView: View {
     @State private var confirmErase = false
     @State private var backupURL: URL?
     @State private var speechOnDevice = SpeechRecognizer().onDevice
+    @State private var remindersOn = Reminders.enabled
+    @Environment(AppLock.self) private var lock
 
     var body: some View {
         let s = store.data.settings
@@ -19,6 +21,35 @@ struct MoreView: View {
                 RowDivider()
                 Button { router.sheet = .income } label: {
                     ListRow(symbol: "shield", title: "Reminder on Home", subtitle: (s.rule?.isEmpty == false) ? s.rule! : "None", chevron: true)
+                }.buttonStyle(.plain)
+            }
+
+            Card(padding: 12) {
+                Toggle(isOn: Binding(get: { remindersOn }, set: { on in
+                    if on {
+                        Task {
+                            let ok = await Reminders.enable()
+                            remindersOn = ok
+                            if ok { Reminders.reschedule(store.data); router.show("Reminders on") }
+                            else { router.show("Allow notifications for Kosh in Settings") }
+                        }
+                    } else { Reminders.disable(); remindersOn = false }
+                })) {
+                    ListRow(symbol: "bell", title: "Bill reminders", subtitle: "3 days and 1 day before each card or loan due date, and on repeat days")
+                }
+                .tint(K.brand)
+                RowDivider()
+                Toggle(isOn: Binding(get: { lock.enabled }, set: { on in
+                    lock.setEnabled(on) { ok in
+                        if on { router.show(ok ? "\(lock.methodName) lock on" : "\(lock.methodName) isn't set up on this iPhone") }
+                    }
+                })) {
+                    ListRow(symbol: "faceid", title: "Lock with \(lock.methodName)", subtitle: "Ask for \(lock.methodName) each time you open Kosh")
+                }
+                .tint(K.brand)
+                RowDivider()
+                Button { router.sheet = .recurringList } label: {
+                    ListRow(symbol: "arrow.triangle.2.circlepath", title: "Repeating entries", subtitle: store.liveRecurring.isEmpty ? "Rent, recharge, SIP… added each month" : "\(store.liveRecurring.count) set up", chevron: true)
                 }.buttonStyle(.plain)
             }
 

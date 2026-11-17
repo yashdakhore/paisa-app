@@ -2,15 +2,15 @@
 // Pure functions, no DOM — shared by the app and the Node tests.
 
 export const DEFAULT_KEYWORDS = {
-  rent: ['rent', 'house rent', 'room rent', 'landlord', 'pg'],
-  bills: ['electricity', 'electric', 'light bill', 'current bill', 'power bill', 'bill', 'water bill', 'gas', 'cylinder', 'lpg', 'maintenance'],
-  groceries: ['grocery', 'groceries', 'vegetables', 'veggies', 'sabzi', 'fruits', 'milk', 'kirana', 'dmart', 'd mart', 'blinkit', 'zepto', 'bigbasket', 'big basket', 'instamart', 'ration', 'eggs', 'bread'],
-  food: ['food', 'lunch', 'dinner', 'breakfast', 'snacks', 'tea', 'chai', 'coffee', 'swiggy', 'zomato', 'restaurant', 'cafe', 'pizza', 'burger', 'biryani', 'dining', 'eating out', 'canteen', 'mess', 'tiffin'],
-  transport: ['uber', 'ola', 'rapido', 'auto', 'rickshaw', 'cab', 'taxi', 'bus', 'metro', 'train', 'petrol', 'diesel', 'fuel', 'parking', 'toll', 'travel', 'flight', 'ticket', 'tickets'],
+  rent: ['rent', 'house rent', 'room rent', 'landlord', 'pg', 'kiraya', 'kiraaya', 'bhada'],
+  bills: ['electricity', 'electric', 'light bill', 'current bill', 'power bill', 'bill', 'water bill', 'gas', 'cylinder', 'lpg', 'maintenance', 'bijli', 'bijlee', 'paani', 'pani'],
+  groceries: ['grocery', 'groceries', 'vegetables', 'veggies', 'sabzi', 'fruits', 'milk', 'kirana', 'dmart', 'd mart', 'blinkit', 'zepto', 'bigbasket', 'big basket', 'instamart', 'ration', 'eggs', 'bread', 'sabji', 'doodh', 'dudh', 'anda', 'ande', 'atta', 'chawal', 'dal', 'tarkari', 'fal', 'kirana store'],
+  food: ['food', 'lunch', 'dinner', 'breakfast', 'snacks', 'tea', 'chai', 'coffee', 'swiggy', 'zomato', 'restaurant', 'cafe', 'pizza', 'burger', 'biryani', 'dining', 'eating out', 'canteen', 'mess', 'tiffin', 'khana', 'nashta', 'samosa', 'thali', 'dhaba', 'chaat'],
+  transport: ['uber', 'ola', 'rapido', 'auto', 'rickshaw', 'cab', 'taxi', 'bus', 'metro', 'train', 'petrol', 'diesel', 'fuel', 'parking', 'toll', 'travel', 'flight', 'ticket', 'tickets', 'gaadi', 'bike'],
   phone: ['recharge', 'mobile', 'phone', 'jio', 'airtel', 'vodafone', 'internet', 'wifi', 'wi-fi', 'broadband', 'data pack'],
-  shopping: ['shopping', 'clothes', 'shoes', 'amazon', 'flipkart', 'myntra', 'meesho', 'ajio', 'shirt', 'dress', 'gadget'],
-  health: ['medicine', 'medicines', 'doctor', 'pharmacy', 'chemist', 'hospital', 'medical', 'clinic', 'gym', 'tablets', 'apollo', 'pharmeasy'],
-  entertainment: ['movie', 'movies', 'netflix', 'prime', 'hotstar', 'spotify', 'youtube premium', 'game', 'games', 'outing', 'party', 'concert', 'subscription'],
+  shopping: ['shopping', 'clothes', 'shoes', 'amazon', 'flipkart', 'myntra', 'meesho', 'ajio', 'shirt', 'dress', 'gadget', 'kapde', 'kapda', 'joote'],
+  health: ['medicine', 'medicines', 'doctor', 'pharmacy', 'chemist', 'hospital', 'medical', 'clinic', 'gym', 'tablets', 'apollo', 'pharmeasy', 'dawai', 'dawa', 'davai', 'dava'],
+  entertainment: ['movie', 'movies', 'netflix', 'prime', 'hotstar', 'spotify', 'youtube premium', 'game', 'games', 'outing', 'party', 'concert', 'subscription', 'picture'],
   debt: ['credit card', 'card bill', 'card payment', 'card', 'sbi card', 'emi', 'loan', 'mpokket', 'repay', 'repaid', 'repayment'],
   other: [],
 };
@@ -21,9 +21,9 @@ const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 
 
 const ONES = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
 const TENS = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
-const SCALES = { hundred: 100, thousand: 1000, lakh: 100000, lakhs: 100000, lac: 100000 };
+const SCALES = { hundred: 100, thousand: 1000, lakh: 100000, lakhs: 100000, lac: 100000, sau: 100, hazaar: 1000, hazar: 1000, hajar: 1000 };
 
-const FILLER = new Set(['spent', 'spend', 'spending', 'paid', 'pay', 'paying', 'bought', 'buy', 'gave', 'give', 'for', 'on', 'at', 'in', 'to', 'of', 'rupees', 'rupee', 'rs', 'inr', 'bucks', 'the', 'a', 'an', 'i', 'my', 'just', 'and', 'towards', 'toward', 'worth', 'got', 'ordered', 'from', 'today', 'yesterday', 'received', 'invested', 'invest', 'saved', 'save', 'put', 'added', 'add', 'into', 'with', 'by', 'was', 'is', 'me']);
+const FILLER = new Set(['spent', 'spend', 'spending', 'paid', 'pay', 'paying', 'bought', 'buy', 'gave', 'give', 'for', 'on', 'at', 'in', 'to', 'of', 'rupees', 'rupee', 'rs', 'inr', 'bucks', 'the', 'a', 'an', 'i', 'my', 'just', 'and', 'towards', 'toward', 'worth', 'got', 'ordered', 'from', 'today', 'yesterday', 'received', 'invested', 'invest', 'saved', 'save', 'put', 'added', 'add', 'into', 'with', 'by', 'was', 'is', 'me', 'ke', 'liye', 'pe', 'par', 'mein', 'ka', 'ki', 'ko', 'se', 'diye', 'diya', 'kharcha', 'kharch', 'kiya', 'kiye', 'rupaye', 'rupay', 'rupiya', 'hai', 'tha', 'aaj', 'kal', 'parso', 'parson', 'wala', 'wale']);
 
 export function pad(n) { return String(n).padStart(2, '0'); }
 export function isoDate(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
@@ -67,6 +67,9 @@ function extractDate(text, now) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const tries = [
     [/\bday before yesterday\b/, () => addDays(today, -2)],
+    [/\bparson?\b/, () => addDays(today, -2)],
+    [/\bkal\b/, () => addDays(today, -1)],
+    [/\baaj\b/, () => today],
     [/\byesterday\b/, () => addDays(today, -1)],
     [/\b(today|tonight|this morning|this evening)\b/, () => today],
     [/\b(\d{1,2}) days? ago\b/, (m) => addDays(today, -parseInt(m[1], 10))],
@@ -109,7 +112,7 @@ function fromDayMonth(today, day, month) {
 }
 
 function extractAmount(text) {
-  const re = /(₹|\brs\.?|\binr)?\s*(\d+(?:\.\d+)?)\s*(k\b|thousand\b|lakhs?\b|lac\b|hundred\b)?\s*(rupees?\b|rs\b|bucks\b|\/-)?/g;
+  const re = /(₹|\brs\.?|\binr)?\s*(\d+(?:\.\d+)?)\s*(k\b|thousand\b|lakhs?\b|lac\b|hundred\b)?\s*(rupees?\b|rupaye\b|rupay\b|rupiya\b|rs\b|bucks\b|\/-)?/g;
   const cands = [];
   let m;
   while ((m = re.exec(text))) {
@@ -165,7 +168,7 @@ export function parseEntry(input, ctx = {}, now = new Date()) {
 
   const cats = ctx.categories || [];
   const nameWords = (x) => [x.name, ...(x.name || '').split(/[^a-zA-Z]+/).filter((w) => w.length > 3)];
-  const cat = bestMatch(rest, cats, (c) => [...(c.keywords || DEFAULT_KEYWORDS[c.id] || []), ...nameWords(c)]);
+  const cat = bestMatch(rest, cats, (c) => [...(c.keywords || []), ...(DEFAULT_KEYWORDS[c.id] || []), ...nameWords(c)]);
   const debt = bestMatch(rest, ctx.debts || [], (x) => nameWords(x).concat(x.keywords || []));
   const goal = bestMatch(rest, ctx.goals || [], (x) => nameWords(x));
   const inv = bestMatch(rest, ctx.investments || [], (x) => nameWords(x).concat([x.type || '']));
@@ -190,4 +193,29 @@ export function parseEntry(input, ctx = {}, now = new Date()) {
     sure: { amount: a.amount !== null, category: !!cat, date: d.found },
     text: original,
   };
+}
+
+// Several items in one sentence: "250 groceries and 120 auto yesterday".
+// A piece only counts as its own item if it still has a number once dates are taken out.
+export function splitItems(input, now = new Date()) {
+  let t = ' ' + (input || '').trim().toLowerCase().replace(/(\d),(?=\d)/g, '$1') + ' ';
+  t = wordsToDigits(t);
+  const hasAmount = (seg) => /\d/.test(extractDate(' ' + seg + ' ', now).rest);
+  const groups = [];
+  for (const raw of t.split(/\s*(?:,|;|&|\band\b|\bplus\b|\baur\b|\bthen\b)\s*/)) {
+    const seg = raw.trim();
+    if (!seg) continue;
+    if (hasAmount(seg) || !groups.length) groups.push(seg); else groups[groups.length - 1] += ' ' + seg;
+  }
+  if (groups.length > 1 && !hasAmount(groups[0])) { groups[1] = groups[0] + ' ' + groups[1]; groups.shift(); }
+  return groups.length ? groups : [input];
+}
+
+export function parseMany(input, ctx = {}, now = new Date()) {
+  const parts = splitItems(input, now);
+  if (parts.length <= 1) return [parseEntry(input, ctx, now)];
+  const rs = parts.map((p) => parseEntry(p, ctx, now));
+  const dated = rs.find((r) => r.sure.date);
+  if (dated) for (const r of rs) if (!r.sure.date) r.date = dated.date;
+  return rs;
 }
