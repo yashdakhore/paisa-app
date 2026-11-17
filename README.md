@@ -15,3 +15,12 @@ The app is plain HTML, CSS and JavaScript in `docs/`. There's no build step, and
 - Install and sync steps: see [SETUP.md](SETUP.md)
 - Tests: `node --test tests/`
 - Run locally: `python3 -m http.server 8777 --directory docs`, then open http://localhost:8777
+
+## Native iPhone app (`ios/`)
+
+A SwiftUI version of Kosh for iPhone with voice entry that uses Apple's Speech framework (Indian English, on-device where supported) and a Siri shortcut ("Hey Siri, add an expense in Kosh"). It uses the same backup format as the web app, so backup files work in both.
+
+- Open `ios/Kosh.xcodeproj` in Xcode, choose your iPhone, and press Run. You need Developer Mode on the phone and your Apple ID added in Xcode → Settings → Apple Accounts.
+- Speech-reading tests: `ios/ParserTests/run.sh` (the same cases as the web app's tests).
+- With a free Apple ID, an installed build works for 7 days; after that, reinstall from Xcode.
+- A private `ios/Kosh/starting-plan.json` (not in git) is bundled when present and loaded on first launch.
