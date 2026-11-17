@@ -336,8 +336,71 @@ function openForm({ title, fields, value = {}, onSave, onDelete, saveLabel = 'Sa
 
 // ---------- entry (voice) sheet ----------
 const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null;
-function stopListening() { try { rec?.abort(); } catch { /* ignore */ } rec = null; }
+
+// One speech recognizer, reused for every entry (Safari on iPhone misbehaves when a new one is
+// created each time). Each listen() call is a session; late events from an older recognizer or
+// session are ignored, and a watchdog resets things if the browser never reports the end.
+const voice = { rec: null, active: false, h: null, pending: null, watchdog: null };
+
+function recognizer() {
+  if (voice.rec) return voice.rec;
+  const r = new (getSR())();
+  r.lang = 'en-IN'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  r.onresult = (ev) => {
+    if (r !== voice.rec) return;
+    voice.h?.result(ev);
+    if (ev.results[ev.results.length - 1]?.isFinal) { try { r.stop(); } catch { /* already stopping */ } }
+  };
+  r.onerror = (ev) => { if (r === voice.rec && ev.error !== 'aborted') voice.h?.error(ev.error); };
+  r.onend = () => {
+    if (r !== voice.rec) return;
+    voice.active = false; clearTimeout(voice.watchdog);
+    const h = voice.h; voice.h = null; h?.end();
+    if (voice.pending) { const go = voice.pending; voice.pending = null; go(); }
+  };
+  voice.rec = r;
+  return r;
+}
+
+function resetVoice() {
+  try { voice.rec?.abort(); } catch { /* ignore */ }
+  voice.rec = null; voice.active = false; clearTimeout(voice.watchdog);
+  const h = voice.h; voice.h = null; h?.end();
+}
+
+function startVoice(handlers) {
+  const go = () => {
+    voice.h = handlers; voice.active = true;
+    try { recognizer().start(); } catch {
+      // Recognizer stuck in a bad state: throw it away and try once with a fresh one.
+      voice.rec = null;
+      try { recognizer().start(); } catch { voice.active = false; voice.h = null; handlers.error('start-failed'); handlers.end(); return; }
+    }
+    clearTimeout(voice.watchdog);
+    voice.watchdog = setTimeout(() => { if (voice.active) resetVoice(); }, 15000);
+  };
+  if (!voice.active) { go(); return; }
+  // A previous session is still winding down. Start right away (while still inside the user's tap,
+  // which iPhone requires) on a fresh recognizer; the old one is abandoned and its late events ignored.
+  const old = voice.rec;
+  voice.h = null; voice.rec = null; voice.active = false; clearTimeout(voice.watchdog);
+  try { old.abort(); } catch { /* ignore */ }
+  try {
+    voice.h = handlers; voice.active = true;
+    recognizer().start();
+    voice.watchdog = setTimeout(() => { if (voice.active) resetVoice(); }, 15000);
+  } catch {
+    // Browser allows only one at a time: wait for the old one to finish, then start.
+    voice.rec = old; voice.active = true; voice.h = null; voice.pending = go;
+    setTimeout(() => { if (voice.pending === go) { voice.pending = null; voice.rec = null; voice.active = false; go(); } }, 800);
+  }
+}
+
+function stopListening() {
+  voice.pending = null;
+  const h = voice.h; voice.h = null; h?.end();
+  if (voice.active) { try { voice.rec.abort(); } catch { resetVoice(); } }
+}
 
 function parseCtx() {
   return { categories: live(state.categories), debts: live(state.debts), goals: live(state.goals), investments: live(state.investments) };
@@ -402,26 +465,25 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
     const mic = $('#vMic');
     const startListening = () => {
       if (!SR) return;
-      stopListening();
-      rec = new SR(); rec.lang = 'en-IN'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
       mic.classList.add('listening'); $('#vHint').textContent = 'Listening… say e.g. "spent 250 on groceries"';
-      let finalText = '';
-      rec.onresult = (ev) => {
-        let interim = ''; finalText = '';
-        for (const r of ev.results) (r.isFinal ? (finalText += r[0].transcript) : (interim += r[0].transcript));
-        vt.value = (finalText || interim).trim();
-        applyParse(vt.value);
-      };
-      rec.onerror = (ev) => {
-        mic.classList.remove('listening');
-        $('#vHint').textContent = ev.error === 'not-allowed' || ev.error === 'service-not-allowed'
-          ? 'Microphone blocked. Allow it in browser settings, or tap the box and use the keyboard 🎤.'
-          : ev.error === 'no-speech' ? "Didn't catch that. Tap 🎤 to try again." : 'Voice error: ' + ev.error + '. You can type instead.';
-      };
-      rec.onend = () => { mic.classList.remove('listening'); rec = null; };
-      try { rec.start(); } catch (err) { mic.classList.remove('listening'); $('#vHint').textContent = 'Voice not available here. Type or use keyboard dictation.'; }
+      startVoice({
+        result: (ev) => {
+          let interim = ''; let finalText = '';
+          for (const r of ev.results) (r.isFinal ? (finalText += r[0].transcript) : (interim += r[0].transcript));
+          vt.value = (finalText || interim).trim();
+          applyParse(vt.value);
+        },
+        error: (code) => {
+          $('#vHint').textContent = code === 'not-allowed' || code === 'service-not-allowed'
+            ? 'Microphone blocked. Allow it in settings, or tap the box and use the keyboard 🎤.'
+            : code === 'no-speech' ? "Didn't catch that. Tap 🎤 to try again."
+              : code === 'start-failed' ? 'Voice could not start. Tap 🎤 again, or use the keyboard 🎤.'
+                : 'Voice error: ' + code + '. Tap 🎤 to try again, or type instead.';
+        },
+        end: () => mic.classList.remove('listening'),
+      });
     };
-    if (mic) mic.onclick = (ev) => { ev.preventDefault(); if (rec) stopListening(); else startListening(); };
+    if (mic) mic.onclick = (ev) => { ev.preventDefault(); if (mic.classList.contains('listening')) stopListening(); else startListening(); };
     if (listen && SR) startListening(); else setTimeout(() => (text ? form.amount : vt).focus(), 50);
   } else {
     $('#eDelete').onclick = () => {
