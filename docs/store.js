@@ -131,7 +131,7 @@ export function buildPlan(state, today = new Date()) {
     const want = st.done ? 0 : Math.max(0, st.perMonth - st.thisMonth - (givenTo[key] || 0));
     const give = Math.max(0, Math.min(want, pool));
     pool -= give;
-    givenTo[key] = (givenTo[key] || 0) + give;
+    givenTo[key] = (givenTo[key] || 0) + want;
     return { goal: g, st, want, give };
   });
   return { income: ms.income, incomeKnown: ms.incomeKnown, budgeted, sips, emis, free, goals, leftover: pool };

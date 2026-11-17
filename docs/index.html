@@ -3,41 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Paisa</title>
-  <meta name="description" content="Personal budget, goals, debts and investments with voice entry">
-  <meta name="theme-color" content="#0f766e">
+  <title>Kosh</title>
+  <meta name="description" content="Budget, goals, debts and investments with voice entry">
+  <meta name="theme-color" content="#09090b">
+  <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Paisa">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Kosh">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="glow" aria-hidden="true"></div>
   <header class="top">
-    <button class="icon-btn" id="prevMonth" aria-label="Previous month">‹</button>
-    <h1 id="monthLabel">—</h1>
-    <button class="icon-btn" id="nextMonth" aria-label="Next month">›</button>
-    <span id="syncDot" class="sync-dot" title="Sync status"></span>
+    <div class="brand"><span class="brand-mark">K</span><span id="pageTitle">Kosh</span></div>
+    <div class="month" id="monthNav">
+      <button class="icon-btn" id="prevMonth" aria-label="Previous month"></button>
+      <span id="monthLabel">—</span>
+      <button class="icon-btn" id="nextMonth" aria-label="Next month"></button>
+    </div>
+    <span id="syncDot" class="sync-dot" role="status" aria-label="Sync status"></span>
   </header>
 
   <main id="view"></main>
 
-  <nav class="tabs">
-    <button data-tab="home" class="active"><span>🏠</span>Home</button>
-    <button data-tab="budget"><span>📊</span>Budget</button>
-    <button id="micFab" class="fab" aria-label="Add entry by voice"><span>🎤</span></button>
-    <button data-tab="plan"><span>🎯</span>Plan</button>
-    <button data-tab="more"><span>⚙️</span>More</button>
+  <nav class="tabs" aria-label="Main">
+    <button data-tab="home" aria-label="Home"><span data-icon="home"></span><small>Home</small></button>
+    <button data-tab="budget" aria-label="Budget"><span data-icon="pie"></span><small>Budget</small></button>
+    <button id="micFab" class="fab" aria-label="Add entry by voice"><span data-icon="mic"></span></button>
+    <button data-tab="plan" aria-label="Plan"><span data-icon="target"></span><small>Plan</small></button>
+    <button data-tab="more" aria-label="More"><span data-icon="sliders"></span><small>More</small></button>
   </nav>
 
   <div id="sheet" class="sheet hidden" role="dialog" aria-modal="true">
     <div class="sheet-backdrop"></div>
     <div class="sheet-body" id="sheetBody"></div>
   </div>
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script type="module" src="app.js"></script>
 </body>

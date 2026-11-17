@@ -1,4 +1,4 @@
-# Paisa
+# Kosh
 
 A small personal-finance web app (installable PWA) for one person, with amounts in ₹. It has:
 

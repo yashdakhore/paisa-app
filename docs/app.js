@@ -3,6 +3,7 @@ import {
   load, persist, emptyState, merge, uid, live, monthKey, inr, monthSummary, cardUsage, goalStatus, buildPlan, CARDS,
 } from './store.js';
 import * as sync from './sync.js';
+import { icon, catIcon } from './icons.js';
 
 // ---------- state ----------
 let state = load();
@@ -65,12 +66,14 @@ async function doSync() {
 }
 
 function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
+  const t = $('#toast'); t.innerHTML = icon('check', 18) + `<span>${esc(msg)}</span>`; t.classList.remove('hidden');
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add('hidden'), 2600);
 }
 
 // ---------- chrome ----------
 function bindChrome() {
+  document.querySelectorAll('[data-icon]').forEach((el) => { el.outerHTML = icon(el.dataset.icon, el.closest('.fab') ? 28 : 22); });
+  $('#prevMonth').innerHTML = icon('chevL', 18); $('#nextMonth').innerHTML = icon('chevR', 18);
   document.querySelectorAll('.tabs [data-tab]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; render(); window.scrollTo(0, 0); }));
   $('#micFab').addEventListener('click', () => openEntry(null, { listen: true }));
   $('#prevMonth').addEventListener('click', () => { viewMonth = shiftMonth(viewMonth, -1); render(); });
@@ -83,8 +86,9 @@ function monthName(mk) { const [y, m] = mk.split('-').map(Number); return new Da
 function render() {
   document.querySelectorAll('.tabs [data-tab]').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   const showMonth = tab === 'home' || tab === 'budget';
-  $('#monthLabel').textContent = showMonth ? monthName(viewMonth) : { plan: 'Plan', more: 'More' }[tab];
-  $('#prevMonth').style.visibility = $('#nextMonth').style.visibility = showMonth ? 'visible' : 'hidden';
+  { const [y, m] = viewMonth.split('-').map(Number); $('#monthLabel').textContent = new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }); }
+  $('#monthNav').classList.toggle('hidden', !showMonth);
+  $('#pageTitle').textContent = { home: 'Kosh', budget: 'Budget', plan: 'Plan', more: 'Settings' }[tab];
   view.innerHTML = { home: homeView, budget: budgetView, plan: planView, more: moreView }[tab]();
   wire(view);
   if (tab === 'more') {
@@ -107,187 +111,281 @@ function bar(fraction, cls = '', marks = []) {
   return `<div class="bar"><i class="${cls}" style="width:${pct(fraction)}%"></i>${marks.map((m) => `<span class="mark" style="left:${m}%"></span>`).join('')}</div>`;
 }
 
+// Ring gauge. fraction 0..1; marks are fractions shown as small ticks.
+function ring(fraction, { size = 112, stroke = 12, color = 'url(#gOrange)', label = '', sub = '', marks = [] } = {}) {
+  const r = (size - stroke) / 2; const c = 2 * Math.PI * r; const f = Math.max(0, Math.min(1, fraction));
+  const ticks = marks.map((m) => {
+    const a = m * 2 * Math.PI; const x1 = size / 2 + (r - stroke / 2 - 2) * Math.cos(a); const y1 = size / 2 + (r - stroke / 2 - 2) * Math.sin(a);
+    const x2 = size / 2 + (r + stroke / 2 + 2) * Math.cos(a); const y2 = size / 2 + (r + stroke / 2 + 2) * Math.sin(a);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--text)" stroke-opacity=".7" stroke-width="2" stroke-linecap="round"/>`;
+  }).join('');
+  return `<div class="ring" style="width:${size}px;height:${size}px" role="img" aria-label="${esc(label + ' ' + sub)}">
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+      <defs><linearGradient id="gOrange" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb37a"/><stop offset=".5" stop-color="#ff7a2f"/><stop offset="1" stop-color="#c93a0e"/></linearGradient></defs>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--surface-2)" stroke-width="${stroke}"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"
+        stroke-dasharray="${c}" stroke-dashoffset="${c * (1 - f)}" style="transition:stroke-dashoffset .8s var(--ease)"/>
+      ${ticks}
+    </svg>
+    <div class="lbl"><div>${label}${sub ? `<small>${sub}</small>` : ''}</div></div></div>`;
+}
+
+// Packed bubble chart: circle area ∝ value. Positions are % of a 340×260 box so it scales.
+function bubbleChart(items, onAct = 'editCat') {
+  const W = 340, H = 260;
+  const vals = items.filter((x) => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 7);
+  if (!vals.length) return '';
+  const total = vals.reduce((t, x) => t + x.value, 0); const vmax = vals[0].value;
+  let rs = vals.map((x) => Math.max(26, 88 * Math.sqrt(x.value / vmax)));
+  const area = rs.reduce((t, r) => t + Math.PI * r * r, 0); const k = Math.min(1, Math.sqrt((0.55 * W * H) / area));
+  rs = rs.map((r) => Math.max(24, r * k));
+  // Place largest first, spiralling out from the centre; if one doesn't fit, shrink all and retry.
+  let placed = [];
+  for (let attempt = 0; attempt < 8; attempt++) {
+    placed = [];
+    const scale = Math.pow(0.9, attempt);
+    const ok = vals.every((x, i) => {
+      const r = Math.max(22, rs[i] * scale);
+      for (let d = 0; d < 260; d += 2) {
+        for (let a = 0; a < 360; a += 10) {
+          const t = (a + i * 47) * Math.PI / 180;
+          const cx = W / 2 + d * Math.cos(t) * 1.3; const cy = H / 2 + d * Math.sin(t);
+          if (cx - r < 0 || cx + r > W || cy - r < 0 || cy + r > H) continue;
+          if (placed.every((p) => Math.hypot(p.cx - cx, p.cy - cy) >= p.r + r + 4)) { placed.push({ cx, cy, r, x, i }); return true; }
+        }
+      }
+      return false;
+    });
+    if (ok) break;
+  }
+  return `<div class="bubbles">${placed.map(({ cx, cy, r, x, i }) => {
+    const p = Math.round((x.value / total) * 100);
+    const big = r >= 44;
+    return `<button class="bubble ${i === 0 ? 'top' : i === 1 ? 'second' : ''} ${x.over ? 'over' : ''}" data-act="${onAct}" data-id="${x.id}"
+      style="left:${((cx - r) / W) * 100}%;top:${((cy - r) / H) * 100}%;width:${((2 * r) / W) * 100}%;height:${((2 * r) / H) * 100}%;animation-delay:${i * 0.05}s"
+      aria-label="${esc(x.label)} ${p}%">${x.iconHtml}${big ? `<span class="bn">${esc(x.label)}</span>` : ''}<span class="bp">${p}%</span></button>`;
+  }).join('')}</div>`;
+}
+
+function splitAmt(n) { return `<span class="cur">₹</span>${Math.abs(Math.round(n)).toLocaleString('en-IN')}`; }
+const dshort = (iso) => new Date(iso + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
 function entryRow(e) {
   const c = catById(e.categoryId);
-  const label = e.type === 'expense' ? `${c?.icon || ''} ${esc(c?.name || 'Other')}` : TYPES[e.type];
-  const sign = e.type === 'income' ? '+' : '';
-  const d = new Date(e.date + 'T00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-  return `<div class="list-entry" data-act="editEntry" data-id="${e.id}">
-    <div><div>${esc(e.note || label)}</div><div class="muted">${d} · ${label}</div></div>
+  const meta = {
+    expense: [catIcon(c, 20), '', c?.name || 'Other'],
+    income: [icon('arrowDL', 20), 'in', 'Income'],
+    save: [icon('wallet', 20), 'save', 'Saving · ' + (state.goals.find((g) => g.id === e.goalId)?.name || 'goal')],
+    invest: [icon('trend', 20), 'inv', 'Investment · ' + (state.investments.find((i) => i.id === e.investmentId)?.name || '')],
+  }[e.type] || [icon('tag'), '', ''];
+  const sign = e.type === 'income' ? '+' : e.type === 'expense' ? '−' : '';
+  return `<div class="li" data-act="editEntry" data-id="${e.id}" role="button" tabindex="0">
+    <div class="tile ${meta[1]}">${meta[0]}</div>
+    <div class="grow"><div class="t">${esc(e.note || meta[2])}</div><div class="s">${dshort(e.date)} · ${esc(meta[2])}</div></div>
     <div class="amt ${e.type === 'income' ? 'good' : ''}">${sign}${inr(e.amount)}</div></div>`;
 }
 
-function cardUsageCard() {
+function cardUsageCard(clickable = true) {
   const cu = cardUsage(state);
   if (!cu.cards.length) return '';
-  const cls = cu.pct > 30 ? 'bad' : cu.pct > 10 ? 'warn' : 'good';
-  return `<div class="card" data-act="goPlan" data-id="debts">
-    <h2>Credit card usage</h2>
-    <div class="row"><b class="${cls}" style="font-size:22px">${Math.round(cu.pct)}% used</b><span class="muted">${inr(cu.balance)} of ${inr(cu.limit)}</span></div>
-    ${bar(cu.pct / 100, cls, [10, 30])}
-    <div class="muted">Goal: under 30% (${inr(cu.limit * 0.3)}), then under 10% (${inr(cu.limit * 0.1)}). Marks show 10% and 30%.</div>
+  const p = cu.pct; const tone = p > 30 ? 'bad' : p > 10 ? 'warn' : 'good';
+  const color = p > 30 ? 'url(#gOrange)' : p > 10 ? 'var(--warn)' : 'var(--good)';
+  return `<div class="card" ${clickable ? 'data-act="goPlan" data-id="debts" role="button" tabindex="0"' : ''}>
+    <div class="card-head"><h2>Credit card usage</h2>${clickable ? `<span class="link">Debts ${icon('chevR', 16)}</span>` : ''}</div>
+    <div class="gauge">
+      ${ring(p / 100, { label: `${Math.round(p)}%`, sub: 'used', color, marks: [0.1, 0.3] })}
+      <div>
+        <div class="num" style="font-size:22px;font-weight:600">${inr(cu.balance)}</div>
+        <div class="muted">of ${inr(cu.limit)} limit</div>
+        <div class="chips"><span class="chip">Under 30% <b>${inr(cu.limit * 0.3)}</b></span><span class="chip">Under 10% <b>${inr(cu.limit * 0.1)}</b></span></div>
+      </div>
+    </div>
+    ${p > 30 ? `<div class="faint" style="margin-top:12px">Ticks on the ring mark 10% and 30%. Pay down <b class="${tone}">${inr(cu.balance - cu.limit * 0.3)}</b> to get under 30%.</div>` : ''}
   </div>`;
+}
+
+function ruleBanner() {
+  return state.settings.rule ? `<div class="banner">${icon('shield', 18)}<span>${esc(state.settings.rule)}</span></div>` : '';
 }
 
 function homeView() {
   const ms = monthSummary(state, viewMonth);
-  const rule = state.settings.rule ? `<div class="banner">📌 ${esc(state.settings.rule)}</div>` : '';
-  const leftCls = ms.left < 0 ? 'bad' : 'good';
-  const cats = live(state.categories).sort((a, b) => (ms.byCat[b.id] || 0) - (ms.byCat[a.id] || 0)).filter((c) => (ms.byCat[c.id] || 0) > 0 || c.budget > 0);
-  const recent = [...ms.entries].sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt)).slice(0, 8);
+  const cats = live(state.categories);
+  const totalBudget = cats.filter((c) => c.id !== 'debt').reduce((t, c) => t + (Number(c.budget) || 0), 0);
+  const recent = [...ms.entries].sort((a, b) => (b.date + (b.createdAt || '')).localeCompare(a.date + (a.createdAt || ''))).slice(0, 6);
   const plan = buildPlan(state);
-  const next = plan.goals.filter((g) => !g.st.done).slice(0, 3);
+  const next = plan.goals.filter((g) => !g.st.done && g.want > 0).slice(0, 3);
   const due = live(state.debts).filter((d) => d.dueDay && d.balance > 0);
   const isNew = !live(state.goals).length && !live(state.debts).length && !live(state.entries).length;
-  const welcome = isNew ? `<div class="card"><h2>Welcome to Paisa</h2>
-    <p>New device? Load your budget, goals and debts by signing in to sync, or by restoring a backup or starting-plan file.</p>
+  const spentAny = ms.spent > 0;
+  const bubbleItems = cats.map((c) => {
+    const s = ms.byCat[c.id] || 0;
+    return { id: c.id, label: c.name, value: spentAny ? s : (Number(c.budget) || 0), over: c.budget > 0 && s > c.budget, iconHtml: catIcon(c, 18) };
+  });
+
+  const welcome = isNew ? `<div class="card"><h2>Welcome to Kosh</h2>
+    <p class="muted" style="margin-top:0">New device? Load your budget, goals and debts by signing in to sync, or by restoring a backup or starting-plan file.</p>
     <button class="btn primary block" data-act="goMore">Set up sync or restore</button></div>` : '';
-  return `${rule}${welcome}
-  <div class="card">
-    <h2>Left this month</h2>
-    ${ms.incomeKnown ? `<div class="big ${leftCls}">${inr(ms.left)}</div>` : `<div class="big">—</div><div class="muted"><a href="#" data-act="goMore">Add your take-home salary</a> to see what's left.</div>`}
-    <div class="stats">
-      <div class="stat"><b>${inr(ms.income)}</b><span>Income${ms.incomeFromEntries ? '' : ' (salary)'}</span></div>
-      <div class="stat"><b>${inr(ms.spent)}</b><span>Spent</span></div>
-      <div class="stat"><b>${inr(ms.saved + ms.invested)}</b><span>Saved + invested</span></div>
-    </div>
-  </div>
+
+  const hero = `<section class="hero">
+    <div class="eyebrow">Left this month</div>
+    ${ms.incomeKnown
+      ? `<p class="hero-amt">${ms.left < 0 ? '−' : ''}${splitAmt(ms.left)}</p>
+         <span class="hero-chip">${icon(ms.left < 0 ? 'arrowDL' : 'arrowUR', 14)} Spent ${inr(ms.spent)} of ${inr(totalBudget)} budget</span>`
+      : `<p class="hero-amt">—</p><span class="hero-chip"><a href="#" data-act="editSalary">Add your take-home salary</a></span>`}
+    <div class="hero-stats">
+      <div class="hero-stat"><span>Income</span><b>${inr(ms.income)}</b></div>
+      <div class="hero-stat"><span>Spent</span><b>${inr(ms.spent)}</b></div>
+      <div class="hero-stat"><span>Saved</span><b>${inr(ms.saved + ms.invested)}</b></div>
+    </div></section>`;
+
+  const quick = `<div class="quick">
+    <button data-act="voice">${icon('mic', 22)}Speak</button>
+    <button data-act="addTyped">${icon('keyboard', 22)}Type</button>
+    <button data-act="goPlan" data-id="plan">${icon('target', 22)}Plan</button></div>`;
+
+  return `<div class="rise">${ruleBanner()}${welcome}${hero}${quick}
   ${cardUsageCard()}
-  ${due.length ? `<div class="card"><h2>Pay on time</h2>${due.map((d) => `<div class="row"><span>${esc(d.name)}</span><span class="muted">due on the ${d.dueDay}${ordinal(d.dueDay)}</span></div>`).join('')}</div>` : ''}
+  ${due.length ? `<div class="card"><h2>Pay on time</h2>${due.map((d) => `<div class="li" data-act="editDebt" data-id="${d.id}"><div class="tile">${icon('calendar')}</div><div class="grow"><div class="t">${esc(d.name)}</div><div class="s">Due on the ${d.dueDay}${ordinal(d.dueDay)}</div></div><div class="amt">${inr(d.balance)}</div></div>`).join('')}</div>` : ''}
   <div class="card">
-    <h2>Where the money went</h2>
-    ${cats.length ? cats.map((c) => {
-      const s = ms.byCat[c.id] || 0; const over = c.budget > 0 && s > c.budget;
-      return `<div class="item" data-act="editCat" data-id="${c.id}"><div class="row"><span>${c.icon || ''} ${esc(c.name)}</span><span>${inr(s)}${c.budget ? ` <span class="muted">/ ${inr(c.budget)}</span>` : ''}</span></div>
-        ${c.budget ? bar(s / c.budget, over ? 'bad' : s / c.budget > 0.85 ? 'warn' : '') : ''}</div>`;
-    }).join('') : '<div class="muted">Nothing yet. Tap 🎤 and say "spent 250 on groceries".</div>'}
+    <div class="card-head"><h2>${spentAny ? 'Where the money went' : 'Your budget plan'}</h2><button class="link" data-act="goBudget">Budget ${icon('chevR', 16)}</button></div>
+    ${bubbleChart(bubbleItems) || '<p class="muted">Set category budgets on the Budget tab.</p>'}
+    <div class="faint">${spentAny ? 'Bubble size shows each category’s share of spending. A red ring means over budget.' : 'Nothing spent yet this month. Bubbles show how your budget is split.'}</div>
   </div>
-  ${next.length ? `<div class="card" data-act="goPlan" data-id="plan"><h2>Save next</h2>${next.map((g) => `<div class="row"><span>${esc(g.goal.name)}</span><b>${inr(g.want)}</b></div>`).join('')}<div class="muted" style="margin-top:6px">Still needed this month. Tap for the full plan.</div></div>` : ''}
-  <div class="card"><h2>Recent</h2>${recent.length ? recent.map(entryRow).join('') : '<div class="muted">No entries this month.</div>'}
-    <div class="btns"><button class="btn" data-act="addTyped">⌨️ Type an entry</button></div></div>`;
+  ${next.length ? `<div class="card" data-act="goPlan" data-id="plan" role="button" tabindex="0"><div class="card-head"><h2>Save next</h2><span class="link">Plan ${icon('chevR', 16)}</span></div>
+    ${next.map((g) => `<div class="li"><div class="tile">${icon(g.goal.kind === 'save' ? 'wallet' : 'card')}</div><div class="grow"><div class="t">${esc(g.goal.name)}</div><div class="s">${pct(g.st.progress)}% done</div></div><div class="amt">${inr(g.want)}<small>this month</small></div></div>`).join('')}</div>` : ''}
+  <div class="card"><div class="card-head"><h2>Recent</h2><button class="link" data-act="goBudget">All ${icon('chevR', 16)}</button></div>
+    ${recent.length ? recent.map(entryRow).join('') : `<p class="muted" style="margin:0">No entries yet. Tap the mic and say “spent 250 on groceries”.</p>`}</div></div>`;
 }
 const ordinal = (n) => (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
 
 function budgetView() {
   const ms = monthSummary(state, viewMonth);
   const cats = live(state.categories).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-  const totalBudget = cats.reduce((t, c) => t + (Number(c.budget) || 0), 0);
+  const totalBudget = cats.filter((c) => c.id !== 'debt').reduce((t, c) => t + (Number(c.budget) || 0), 0);
   const all = [...ms.entries].sort((a, b) => b.date.localeCompare(a.date));
-  return `<div class="card"><h2>Monthly budget</h2>
-    <div class="row"><span>Spent</span><b>${inr(ms.spent)} <span class="muted">of ${inr(totalBudget)}</span></b></div>
-    ${bar(totalBudget ? ms.spent / totalBudget : 0, ms.spent > totalBudget ? 'bad' : '')}
-    <div class="muted">Tap a category to change its budget, name or voice keywords.</div></div>
-  <div class="card">${cats.map((c) => {
-    const s = ms.byCat[c.id] || 0; const left = (c.budget || 0) - s;
-    return `<div class="item" data-act="editCat" data-id="${c.id}">
-      <div class="row"><span>${c.icon || ''} ${esc(c.name)}</span><span>${inr(s)} <span class="muted">/ ${c.budget ? inr(c.budget) : 'no budget'}</span></span></div>
-      ${c.budget ? bar(s / c.budget, s > c.budget ? 'bad' : s / c.budget > 0.85 ? 'warn' : '') + `<div class="muted">${left >= 0 ? inr(left) + ' left' : inr(-left) + ' over'}</div>` : ''}</div>`;
-  }).join('')}
-  <div class="btns"><button class="btn" data-act="addCat">＋ Add category</button></div></div>
-  <div class="card"><h2>All entries · ${monthName(viewMonth)}</h2>${all.length ? all.map(entryRow).join('') : '<div class="muted">No entries.</div>'}</div>`;
+  const f = totalBudget ? ms.spent / totalBudget : 0;
+  return `<div class="rise"><div class="card"><h2>Monthly budget</h2>
+    <div class="gauge">${ring(f, { size: 124, label: `${pct(f)}%`, sub: 'spent', color: f > 1 ? 'var(--bad)' : 'url(#gOrange)' })}
+      <div><div class="num" style="font-size:26px;font-weight:700">${inr(ms.spent)}</div><div class="muted">of ${inr(totalBudget)}</div>
+      <div class="chips"><span class="chip">${totalBudget - ms.spent >= 0 ? 'Left' : 'Over'} <b>${inr(Math.abs(totalBudget - ms.spent))}</b></span></div></div></div></div>
+  <div class="card"><div class="card-head"><h2>Categories</h2><button class="link" data-act="addCat">${icon('plus', 16)} Add</button></div>
+  ${cats.map((c) => {
+    const s = ms.byCat[c.id] || 0; const left = (c.budget || 0) - s; const r = c.budget ? s / c.budget : 0;
+    return `<div class="li" data-act="editCat" data-id="${c.id}" role="button" tabindex="0" style="align-items:flex-start">
+      <div class="tile">${catIcon(c)}</div>
+      <div class="grow"><div class="row"><span class="t">${esc(c.name)}</span><span class="amt">${inr(s)}</span></div>
+      ${c.budget ? bar(r, r > 1 ? 'bad' : r > 0.85 ? 'warn' : '') + `<div class="row" style="margin-top:6px"><span class="s">${left >= 0 ? inr(left) + ' left' : `<span class="bad">${inr(-left)} over</span>`}</span><span class="s">of ${inr(c.budget)}</span></div>` : '<div class="s">No budget set</div>'}</div></div>`;
+  }).join('')}</div>
+  <div class="card"><h2>All entries · ${monthName(viewMonth)}</h2>${all.length ? all.map(entryRow).join('') : '<p class="muted" style="margin:0">No entries.</p>'}
+    <div class="btns"><button class="btn" data-act="addTyped">${icon('keyboard', 18)} Type an entry</button></div></div></div>`;
 }
 
 function planView() {
   const segs = [['plan', 'This month'], ['goals', 'Goals'], ['debts', 'Debts'], ['invest', 'Investments']];
-  const head = `<div class="seg">${segs.map(([k, l]) => `<button class="${planSeg === k ? 'active' : ''}" data-act="seg" data-id="${k}">${l}</button>`).join('')}</div>`;
-  return head + { plan: planTab, goals: goalsTab, debts: debtsTab, invest: investTab }[planSeg]();
+  const head = `<div class="seg" role="tablist">${segs.map(([k, l]) => `<button role="tab" aria-selected="${planSeg === k}" class="${planSeg === k ? 'active' : ''}" data-act="seg" data-id="${k}">${l}</button>`).join('')}</div>`;
+  return head + `<div class="rise">${{ plan: planTab, goals: goalsTab, debts: debtsTab, invest: investTab }[planSeg]()}</div>`;
 }
 
 function planTab() {
   const p = buildPlan(state);
+  const goalsList = (rows) => rows.map((g, i) => `<div class="li" data-act="editGoal" data-id="${g.goal.id}" role="button" tabindex="0">
+      <div class="tile">${i + 1}</div>
+      <div class="grow"><div class="t">${esc(g.goal.name)}</div>
+      <div class="s">${inr(g.st.perMonth)}/mo for ${g.st.months} mo${g.st.thisMonth ? ` · ${inr(g.st.thisMonth)} done` : ''}${p.incomeKnown && g.give < g.want ? ` · <span class="warn">short ${inr(g.want - g.give)}</span>` : ''}</div></div>
+      <div class="amt">${g.want === 0 ? '<small>covered by<br>the goal above</small>' : inr(p.incomeKnown ? g.give : g.want)}</div></div>`).join('');
+  const open = p.goals.filter((g) => !g.st.done);
   if (!p.incomeKnown) {
-    return `<div class="card"><h2>Monthly plan</h2><p>Add your monthly take-home salary to see how much you can put toward each goal.</p>
-      <button class="btn primary block" data-act="editSalary">Add salary</button></div>${goalsNeeded(p)}`;
+    return `<div class="card"><h2>Monthly plan</h2><p class="muted" style="margin-top:0">Add your monthly take-home salary to see how much you can put toward each goal.</p>
+      <button class="btn primary block" data-act="editSalary">${icon('briefcase', 18)} Add salary</button></div>
+      <div class="card"><h2>Monthly need per goal</h2>${goalsList(open)}</div>`;
   }
-  return `<div class="card"><h2>Monthly plan</h2>
-    <table class="plan">
-      <tr><td>Take-home income</td><td>${inr(p.income)}</td></tr>
-      <tr><td>− Budgeted spending</td><td>${inr(p.budgeted)}</td></tr>
-      <tr><td>− SIPs / investments</td><td>${inr(p.sips)}</td></tr>
-      ${p.emis ? `<tr><td>− EMIs</td><td>${inr(p.emis)}</td></tr>` : ''}
-      <tr class="total"><td>Free for goals</td><td class="${p.free < 0 ? 'bad' : 'good'}">${inr(p.free)}</td></tr>
-    </table></div>
-  <div class="card"><h2>Put this toward your goals this month</h2>
-    ${p.goals.filter((g) => !g.st.done).map((g, i) => `<div class="item" data-act="editGoal" data-id="${g.goal.id}">
-      <div class="row"><span>${i + 1}. ${esc(g.goal.name)}</span><b>${inr(g.give)}</b></div>
-      <div class="muted">Needs ${inr(g.st.perMonth)}/month for ${g.st.months} month${g.st.months > 1 ? 's' : ''}${g.st.thisMonth ? ` · ${inr(g.st.thisMonth)} done this month` : ''}${g.give < g.want ? ` · <span class="warn">short by ${inr(g.want - g.give)}</span>` : ''}</div></div>`).join('') || '<div class="muted">All goals done 🎉</div>'}
-    ${p.leftover > 0 ? `<div class="banner" style="margin:10px 0 0">After goals, ${inr(p.leftover)} is spare. Put it toward your first unfinished goal to finish sooner, or increase your SIP.</div>` : ''}
-    ${p.free < 0 ? `<div class="banner" style="margin:10px 0 0">Your budgets are more than your income. Lower a category budget on the Budget tab.</div>` : ''}
+  return `<section class="hero" style="padding-bottom:20px"><div class="eyebrow">Free for goals this month</div>
+    <p class="hero-amt">${p.free < 0 ? '−' : ''}${splitAmt(p.free)}</p>
+    <div class="hero-stats"><div class="hero-stat"><span>Income</span><b>${inr(p.income)}</b></div><div class="hero-stat"><span>Budget</span><b>${inr(p.budgeted)}</b></div><div class="hero-stat"><span>SIPs${p.emis ? ' + EMIs' : ''}</span><b>${inr(p.sips + p.emis)}</b></div></div></section>
+  <div class="card"><h2>Put this toward your goals</h2>
+    ${goalsList(open) || '<p class="muted">All goals done.</p>'}
+    ${p.leftover > 0 ? `<div class="banner" style="margin:14px 0 0">${icon('bulb', 18)}<span>After goals, ${inr(p.leftover)} is spare. Put it toward your first unfinished goal to finish sooner, or increase your SIP.</span></div>` : ''}
+    ${p.free < 0 ? `<div class="banner" style="margin:14px 0 0">${icon('info', 18)}<span>Your budgets are more than your income. Lower a category budget on the Budget tab.</span></div>` : ''}
   </div>`;
-}
-function goalsNeeded(p) {
-  return `<div class="card"><h2>Monthly need per goal</h2>${p.goals.map((g) => `<div class="row"><span>${esc(g.goal.name)}</span><b>${inr(g.st.perMonth)}</b></div>`).join('')}</div>`;
 }
 
 function goalsTab() {
   const gs = live(state.goals).sort((a, b) => (a.priority || 99) - (b.priority || 99));
   return gs.map((g) => {
     const st = goalStatus(g, state);
-    const line = g.kind === 'save'
-      ? `${inr(st.current)} saved of ${inr(st.target)}`
-      : `Balance ${inr(st.current)} → target ${inr(st.target)}`;
-    return `<div class="card">
-      <div class="row"><b>${esc(g.name)}</b><span class="pill">${st.done ? 'Done ✓' : pct(st.progress) + '%'}</span></div>
-      ${bar(st.progress, st.done ? 'good' : '')}
-      <div class="muted">${line}${g.deadline ? ` · by ${new Date(g.deadline + '-01T00:00').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}` : ''}</div>
-      ${st.done ? '' : `<div style="margin-top:6px">Needs <b>${inr(st.perMonth)}/month</b> for ${st.months} month${st.months > 1 ? 's' : ''}</div>`}
-      <div class="btns">${g.kind === 'save' ? `<button class="btn primary" data-act="addToGoal" data-id="${g.id}">＋ Add money</button>` : `<button class="btn primary" data-act="payGoalDebt" data-id="${g.id}">Record payment</button>`}
-      <button class="btn" data-act="editGoal" data-id="${g.id}">Edit</button></div></div>`;
-  }).join('') + `<button class="btn block" data-act="addGoal">＋ New goal</button>`;
+    const line = g.kind === 'save' ? `${inr(st.current)} of ${inr(st.target)} saved` : `${inr(st.current)} owed → ${inr(st.target)}`;
+    const by = g.deadline ? new Date(g.deadline + '-01T00:00').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '';
+    return `<div class="card"><div class="goal">
+      ${ring(st.progress, { size: 84, stroke: 9, label: st.done ? icon('check', 26) : `${pct(st.progress)}%`, color: st.done ? 'var(--good)' : 'url(#gOrange)' })}
+      <div class="grow"><h3>${esc(g.name)}</h3><div class="muted">${line}</div>
+        <div class="chips">${st.done ? '<span class="pill ok">Done</span>' : `<span class="pill hot">${inr(st.perMonth)}/month</span>`}${by ? `<span class="pill">${icon('calendar', 13)} ${by}</span>` : ''}</div></div></div>
+      <div class="btns">${g.kind === 'save' ? `<button class="btn primary" data-act="addToGoal" data-id="${g.id}">${icon('plus', 18)} Add money</button>` : `<button class="btn primary" data-act="payGoalDebt" data-id="${g.id}">Log payment</button>`}
+      <button class="btn" data-act="editGoal" data-id="${g.id}">${icon('pencil', 16)} Edit</button></div></div>`;
+  }).join('') + `<button class="btn block" data-act="addGoal">${icon('plus', 18)} New goal</button>`;
 }
 
 function debtsTab() {
   const ds = live(state.debts);
-  const rule = state.settings.rule ? `<div class="banner">📌 ${esc(state.settings.rule)}</div>` : '';
-  return rule + cardUsageCard() + ds.map((d) => {
+  return ruleBanner() + cardUsageCard(false) + ds.map((d) => {
     const usage = d.kind === 'card' && d.limit ? d.balance / d.limit : null;
+    const rows = [
+      usage !== null ? ['Limit', `${inr(d.limit)} · ${Math.round(usage * 100)}% used`] : null,
+      d.emi ? ['EMI', `${inr(d.emi)}/month`] : null,
+      d.rate ? ['Interest', `${d.rate}% a year`] : null,
+      d.dueDay ? ['Due', `${d.dueDay}${ordinal(d.dueDay)} of each month`] : null,
+    ].filter(Boolean);
     return `<div class="card">
-      <div class="row"><b>${esc(d.name)}</b><span class="pill">${{ card: 'Credit card', loan: 'Loan', emi: 'EMI' }[d.kind] || d.kind}</span></div>
-      <div class="row"><span class="muted">Balance</span><b>${inr(d.balance)}</b></div>
-      ${usage !== null ? `<div class="row"><span class="muted">Limit</span><span>${inr(d.limit)} · ${Math.round(usage * 100)}% used</span></div>${bar(usage, usage > 0.3 ? 'bad' : usage > 0.1 ? 'warn' : 'good', [10, 30])}` : ''}
-      ${d.emi ? `<div class="row"><span class="muted">EMI</span><span>${inr(d.emi)}/month</span></div>` : ''}
-      ${d.rate ? `<div class="row"><span class="muted">Interest</span><span>${d.rate}% a year</span></div>` : ''}
-      ${d.dueDay ? `<div class="row"><span class="muted">Due</span><span>${d.dueDay}${ordinal(d.dueDay)} of each month</span></div>` : ''}
-      ${d.note ? `<div class="muted">${esc(d.note)}</div>` : ''}
-      <div class="btns"><button class="btn primary" data-act="payDebt" data-id="${d.id}">Record payment</button><button class="btn" data-act="editDebt" data-id="${d.id}">Edit</button></div></div>`;
-  }).join('') + `<button class="btn block" data-act="addDebt">＋ Add debt / EMI / card</button>`;
+      <div class="li" style="padding-top:0;cursor:default"><div class="tile">${icon(d.kind === 'card' ? 'card' : 'bank')}</div>
+        <div class="grow"><div class="t">${esc(d.name)}</div><div class="s">${{ card: 'Credit card', loan: 'Loan', emi: 'EMI' }[d.kind] || d.kind}</div></div>
+        <div class="amt">${inr(d.balance)}<small>owed</small></div></div>
+      ${usage !== null ? bar(usage, usage > 0.3 ? 'bad' : usage > 0.1 ? 'warn' : 'good', [10, 30]) : ''}
+      ${rows.map(([k, v]) => `<div class="row" style="margin-top:10px"><span class="muted">${k}</span><span>${v}</span></div>`).join('')}
+      ${d.note ? `<p class="faint" style="margin:12px 0 0">${esc(d.note)}</p>` : ''}
+      <div class="btns"><button class="btn primary" data-act="payDebt" data-id="${d.id}">Log payment</button><button class="btn" data-act="editDebt" data-id="${d.id}">${icon('pencil', 16)} Edit</button></div></div>`;
+  }).join('') + `<button class="btn block" data-act="addDebt">${icon('plus', 18)} Add debt, EMI or card</button>`;
 }
 
 function investTab() {
   const is = live(state.investments);
   const tot = is.reduce((t, i) => ({ m: t.m + (+i.monthly || 0), inv: t.inv + (+i.invested || 0), v: t.v + (+i.value || 0) }), { m: 0, inv: 0, v: 0 });
   const gain = tot.v - tot.inv;
-  return `<div class="card"><h2>All investments</h2>
-    <div class="stats"><div class="stat"><b>${inr(tot.v)}</b><span>Current value</span></div><div class="stat"><b>${inr(tot.inv)}</b><span>Invested</span></div>
-    <div class="stat"><b class="${gain >= 0 ? 'good' : 'bad'}">${inr(gain)}</b><span>Gain</span></div></div>
-    <div class="muted" style="margin-top:8px">${inr(tot.m)} a month going in</div></div>` +
+  return `<section class="hero" style="padding-bottom:20px"><div class="eyebrow">Portfolio value</div>
+    <p class="hero-amt">${splitAmt(tot.v)}</p>
+    <span class="hero-chip">${icon(gain >= 0 ? 'arrowUR' : 'arrowDL', 14)} ${gain >= 0 ? '+' : '−'}${inr(Math.abs(gain))}${tot.inv ? ` (${((gain / tot.inv) * 100).toFixed(1)}%)` : ''}</span>
+    <div class="hero-stats"><div class="hero-stat"><span>Invested</span><b>${inr(tot.inv)}</b></div><div class="hero-stat"><span>Monthly</span><b>${inr(tot.m)}</b></div><div class="hero-stat"><span>Holdings</span><b>${is.length}</b></div></div></section>` +
     is.map((i) => {
       const g = (+i.value || 0) - (+i.invested || 0);
-      return `<div class="card"><div class="row"><b>${esc(i.name)}</b><span class="pill">${esc(i.type)}</span></div>
-        <div class="row"><span class="muted">Monthly</span><span>${i.monthly ? inr(i.monthly) : '—'}</span></div>
-        <div class="row"><span class="muted">Invested so far</span><span>${inr(i.invested || 0)}</span></div>
-        <div class="row"><span class="muted">Current value</span><b>${inr(i.value || 0)}</b></div>
-        ${i.invested ? `<div class="row"><span class="muted">Gain</span><span class="${g >= 0 ? 'good' : 'bad'}">${inr(g)} (${((g / i.invested) * 100).toFixed(1)}%)</span></div>` : ''}
-        ${i.maturity ? `<div class="row"><span class="muted">Matures</span><span>${esc(i.maturity)}</span></div>` : ''}
-        ${i.note ? `<div class="muted">${esc(i.note)}</div>` : ''}
-        <div class="btns"><button class="btn primary" data-act="addToInv" data-id="${i.id}">＋ Add money</button><button class="btn" data-act="editInv" data-id="${i.id}">Edit / update value</button></div></div>`;
-    }).join('') + `<button class="btn block" data-act="addInv">＋ Add investment</button>`;
+      return `<div class="card">
+        <div class="li" style="padding-top:0;cursor:default"><div class="tile inv">${icon('trend')}</div>
+          <div class="grow"><div class="t">${esc(i.name)}</div><div class="s">${esc(i.type)}${i.monthly ? ` · ${inr(i.monthly)}/month` : ''}</div></div>
+          <div class="amt">${inr(i.value || 0)}${i.invested ? `<small class="${g >= 0 ? 'good' : 'bad'}">${g >= 0 ? '+' : '−'}${inr(Math.abs(g))}</small>` : ''}</div></div>
+        <div class="row" style="margin-top:6px"><span class="muted">Invested so far</span><span>${inr(i.invested || 0)}</span></div>
+        ${i.maturity ? `<div class="row" style="margin-top:8px"><span class="muted">Matures</span><span>${esc(i.maturity)}</span></div>` : ''}
+        ${i.note ? `<p class="faint" style="margin:12px 0 0">${esc(i.note)}</p>` : ''}
+        <div class="btns"><button class="btn primary" data-act="addToInv" data-id="${i.id}">${icon('plus', 18)} Add money</button><button class="btn" data-act="editInv" data-id="${i.id}">${icon('pencil', 16)} Update</button></div></div>`;
+    }).join('') + `<button class="btn block" data-act="addInv">${icon('plus', 18)} Add investment</button>`;
+}
+
+function setRow(ic, title, sub, act, extra = '') {
+  return `<div class="li" ${act ? `data-act="${act}" role="button" tabindex="0"` : ''}><div class="tile">${icon(ic)}</div>
+    <div class="grow"><div class="t">${title}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>${extra}${act ? icon('chevR', 18, 'chev') : ''}</div>`;
 }
 
 function moreView() {
   const cfg = sync.getConfig();
-  return `<div class="card"><h2>Income</h2>
-    <div class="row"><span>Monthly take-home salary</span><b>${state.settings.salary ? inr(state.settings.salary) : 'not set'}</b></div>
-    <div class="muted">If you log income entries (say "got salary 30000"), those are used for that month instead.</div>
-    <div class="btns"><button class="btn" data-act="editSalary">Edit income & reminder</button></div></div>
+  return `<div class="rise">
+  <div class="card set">${setRow('briefcase', 'Monthly take-home salary', state.settings.salary ? inr(state.settings.salary) : 'Not set', 'editSalary')}
+    ${setRow('shield', 'Reminder on Home', esc(state.settings.rule || 'None'), 'editSalary')}</div>
   <div class="card"><h2>Sync between devices</h2><div id="syncBox" class="muted">Checking…</div></div>
-  <div class="card"><h2>Backup</h2>
-    <div class="muted">Save a copy of everything, or move data to another device without sync.</div>
-    <div class="btns"><button class="btn" data-act="exportJson">⬇️ Backup file</button><button class="btn" data-act="exportCsv">⬇️ Entries as CSV</button></div>
-    <div class="btns"><label class="btn">⬆️ Restore from backup<input type="file" id="restoreFile" accept="application/json,.json" hidden></label></div></div>
-  <div class="card"><h2>Voice tips</h2><div class="muted">Say things like:<br>“spent 250 on groceries” · “paid 9000 rent” · “120 auto yesterday” · “paid 5000 to SBI card” · “saved 2000 for emergency fund” · “invested 1000 in SIP” · “got salary 30000”.<br><br>On iPhone, if the 🎤 button doesn't listen, tap the text box and use the microphone key on the keyboard.</div></div>
-  <div class="card"><h2>About</h2><div class="muted">Paisa keeps your data on this device${cfg.url ? ' and in your own Supabase database' : ''}. It never asks for card numbers, account numbers or PAN.</div>
-  <div class="btns"><button class="btn danger" data-act="resetAll">Erase data on this device</button></div></div>`;
+  <div class="card set">
+    ${setRow('download', 'Backup file', 'Save everything as one file', 'exportJson')}
+    ${setRow('download', 'Entries as CSV', 'Open in Excel or Google Sheets', 'exportCsv')}
+    <label class="li" role="button" tabindex="0"><div class="tile">${icon('upload')}</div><div class="grow"><div class="t">Restore from backup</div><div class="s">Merges with data on this device</div></div>${icon('chevR', 18, 'chev')}<input type="file" id="restoreFile" accept="application/json,.json" hidden></label>
+  </div>
+  <div class="card"><h2>Voice tips</h2><p class="muted" style="margin:0">Say things like “spent 250 on groceries”, “paid 9000 rent”, “120 auto yesterday”, “paid 5000 to SBI card”, “saved 2000 for emergency fund”, “invested 1000 in SIP” or “got salary 30000”.<br><br>On iPhone, if the mic button doesn’t listen, tap the text box and use the microphone key on the keyboard.</p></div>
+  <div class="card"><h2>About</h2><p class="muted" style="margin:0">Kosh keeps your data on this device${cfg.url ? ' and in your own Supabase database' : ''}. It never asks for card numbers, account numbers or PAN.</p>
+  <div class="btns"><button class="btn danger" data-act="resetAll">${icon('trash', 18)} Erase data on this device</button></div></div></div>`;
 }
 
 async function fillSyncBox() {
@@ -410,11 +508,11 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
   const SR = getSR();
   const e = existing ? { ...existing } : { type: 'expense', amount: null, categoryId: 'other', date: isoDate(new Date()), note: '', reduceDebt: true };
   const cats = live(state.categories).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-  const opt = (arr, sel, none) => (none ? `<option value="">${none}</option>` : '') + arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc((x.icon ? x.icon + ' ' : '') + x.name)}</option>`).join('');
+  const opt = (arr, sel, none) => (none ? `<option value="">${none}</option>` : '') + arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
   openSheet(`<h3>${existing ? 'Edit entry' : 'New entry'}</h3>
     ${existing ? '' : `<div class="voice-box"><textarea id="vText" rows="2" placeholder='Say or type: "spent 250 on groceries"'>${esc(text)}</textarea>
-      ${SR ? '<button class="mic-btn" id="vMic" aria-label="Speak">🎤</button>' : ''}</div>
-      <div class="hint" id="vHint">${SR ? 'Tap 🎤 and speak, or type. Check the details below, then Save.' : 'Tap the box and use the 🎤 key on your keyboard to dictate, or type. Check the details below, then Save.'}</div>`}
+      ${SR ? `<button class="mic-btn" id="vMic" aria-label="Speak">${icon('mic', 26)}</button>` : ''}</div>
+      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. Check the details below, then Save.' : 'Tap the box and use the mic key on your keyboard to dictate, or type. Check the details below, then Save.'}</div>`}
     <form id="eform">
       <div class="grid2">
         <label class="f">Amount (₹)<input name="amount" type="number" inputmode="decimal" step="any" value="${e.amount ?? ''}" required></label>
@@ -475,10 +573,10 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
         },
         error: (code) => {
           $('#vHint').textContent = code === 'not-allowed' || code === 'service-not-allowed'
-            ? 'Microphone blocked. Allow it in settings, or tap the box and use the keyboard 🎤.'
-            : code === 'no-speech' ? "Didn't catch that. Tap 🎤 to try again."
-              : code === 'start-failed' ? 'Voice could not start. Tap 🎤 again, or use the keyboard 🎤.'
-                : 'Voice error: ' + code + '. Tap 🎤 to try again, or type instead.';
+            ? 'Microphone blocked. Allow it in settings, or tap the box and use the keyboard mic.'
+            : code === 'no-speech' ? "Didn't catch that. Tap the mic to try again."
+              : code === 'start-failed' ? 'Voice could not start. Tap the mic again, or use the keyboard mic.'
+                : 'Voice error: ' + code + '. Tap the mic to try again, or type instead.';
         },
         end: () => mic.classList.remove('listening'),
       });
@@ -534,6 +632,8 @@ function applyEffects(e, sign) {
 Object.assign(actions, {
   editEntry: (id) => openEntry(state.entries.find((e) => e.id === id)),
   addTyped: () => openEntry(null),
+  voice: () => openEntry(null, { listen: true }),
+  goBudget: () => { tab = 'budget'; render(); window.scrollTo(0, 0); },
   goMore: () => { tab = 'more'; render(); },
   goPlan: (seg) => { tab = 'plan'; planSeg = seg || 'plan'; render(); },
   seg: (k) => { planSeg = k; render(); },
@@ -570,7 +670,7 @@ Object.assign(actions, {
     download(`paisa-entries-${isoDate(new Date())}.csv`, rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv');
   },
   resetAll: () => {
-    if (!confirm('Erase all Paisa data on this device? (Your synced copy and backup files are not affected.)')) return;
+    if (!confirm('Erase all Kosh data on this device? (Your synced copy and backup files are not affected.)')) return;
     localStorage.removeItem('paisa.v1'); location.reload();
   },
 
@@ -716,7 +816,7 @@ async function restore(ev) {
   const file = ev.target.files[0]; if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    if (!data.categories || !data.entries) throw new Error('Not a Paisa backup');
+    if (!data.categories || !data.entries) throw new Error('Not a Kosh backup');
     if (!confirm('Combine this backup with the data on this device? (The newest version of each item is kept.)')) return;
     commit(() => { state = merge(state, data); });
     toast('Backup restored');
