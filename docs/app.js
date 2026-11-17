@@ -5,6 +5,8 @@ import {
 import * as sync from './sync.js';
 import { icon, catIcon } from './icons.js';
 
+export const VERSION = '1.3 (18 Nov 2026)';
+
 // ---------- state ----------
 let state = load();
 let tab = 'home';
@@ -385,6 +387,7 @@ function moreView() {
   </div>
   <div class="card"><h2>Voice tips</h2><p class="muted" style="margin:0">Say things like “spent 250 on groceries”, “paid 9000 rent”, “120 auto yesterday”, “paid 5000 to SBI card”, “saved 2000 for emergency fund”, “invested 1000 in SIP” or “got salary 30000”.<br><br>On iPhone, if the mic button doesn’t listen, tap the text box and use the microphone key on the keyboard.</p></div>
   <div class="card"><h2>About</h2><p class="muted" style="margin:0">Kosh keeps your data on this device${cfg.url ? ' and in your own Supabase database' : ''}. It never asks for card numbers, account numbers or PAN.</p>
+  <p class="faint" style="margin:10px 0 0">Version ${VERSION}${IS_IOS ? ' · iPhone mode: keyboard dictation' : ''}</p>
   <div class="btns"><button class="btn danger" data-act="resetAll">${icon('trash', 18)} Erase data on this device</button></div></div></div>`;
 }
 
@@ -519,15 +522,15 @@ function parseCtx() {
 }
 
 function openEntry(existing, { listen = false, text = '' } = {}) {
-  const SR = getSR();
+  const SR = IS_IOS ? null : getSR();
   const e = existing ? { ...existing } : { type: 'expense', amount: null, categoryId: 'other', date: isoDate(new Date()), note: '', reduceDebt: true };
   const cats = live(state.categories).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
   const opt = (arr, sel, none) => (none ? `<option value="">${none}</option>` : '') + arr.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
   openSheet(`<h3>${existing ? 'Edit entry' : 'New entry'}</h3>
     ${existing ? '' : `<div class="voice-box"><textarea id="vText" rows="2" placeholder='Say or type: "spent 250 on groceries"'>${esc(text)}</textarea>
-      ${SR ? `<button class="mic-btn" id="vMic" aria-label="Speak">${icon('mic', 26)}</button>` : ''}</div>
-      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. Check the details below, then Save.' : 'Tap the box and use the mic key on your keyboard to dictate, or type. Check the details below, then Save.'}</div>
-      <button type="button" class="btn block ${SR && !IS_IOS ? 'hidden' : ''}" id="vKbd" style="margin:-4px 0 16px">${icon('keyboard', 18)} Use keyboard dictation</button>`}
+      <button type="button" class="mic-btn" id="vMic" aria-label="${SR ? 'Speak' : 'Dictate with the keyboard'}">${icon('mic', 26)}</button></div>
+      <div class="hint" id="vHint">${SR ? 'Tap the mic and speak, or type. Check the details below, then Save.' : 'Tap the <b>mic key on your keyboard</b> (bottom right) and say e.g. “spent 250 on groceries”. Then check the details and tap Save.'}</div>
+      <button type="button" class="btn block hidden" id="vKbd" style="margin:-4px 0 16px">${icon('keyboard', 18)} Use keyboard dictation</button>`}
     <form id="eform">
       <div class="grid2">
         <label class="f">Amount (₹)<input name="amount" type="number" inputmode="decimal" step="any" value="${e.amount ?? ''}" required></label>
@@ -602,9 +605,11 @@ function openEntry(existing, { listen = false, text = '' } = {}) {
       $('#vHint').textContent = 'Starting the mic…';
       startVoice(h);
     };
-    $('#vKbd').onclick = () => { stopListening(); vt.focus(); $('#vHint').textContent = 'Now tap the mic key on your keyboard (bottom right) and speak.'; };
-    if (mic) mic.onclick = (ev) => { ev.preventDefault(); if (mic.classList.contains('listening')) stopListening(); else startListening(); };
-    if (listen && SR) startListening(); else setTimeout(() => (text ? form.amount : vt).focus(), 50);
+    const dictate = () => { stopListening(); vt.focus(); $('#vHint').innerHTML = 'Now tap the <b>mic key on your keyboard</b> (bottom right) and speak.'; };
+    mic.onclick = (ev) => { ev.preventDefault(); if (!SR) { dictate(); return; } if (mic.classList.contains('listening')) stopListening(); else startListening(); };
+    $('#vKbd').onclick = dictate;
+    // Focus must happen inside the user's tap, or iPhone won't open the keyboard.
+    if (listen && SR) startListening(); else if (text) setTimeout(() => form.amount.focus(), 50); else vt.focus();
   } else {
     $('#eDelete').onclick = () => {
       if (!confirm('Delete this entry?')) return;
