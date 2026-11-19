@@ -117,6 +117,13 @@ final class KoshStore {
         save()
     }
 
+    func markFamily(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, !(data.settings.familyNames ?? []).contains(where: { $0.lowercased() == n.lowercased() }) else { return }
+        data.settings.familyNames = (data.settings.familyNames ?? []) + [n]
+        data.settings.updatedAt = nowMillis()
+    }
+
     func saveMyName(_ name: String) {
         let n = name.trimmingCharacters(in: .whitespaces)
         data.settings.myName = n.isEmpty ? nil : n
@@ -286,6 +293,7 @@ final class KoshStore {
         item.txnKey = key
         item.gmailId = gmailId
         if manual { item.backfill = true }
+        if t.type == "income" { item.incomeSource = AppData.guessIncomeSource(text + " " + merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? []) }
         upsert(\.inbox, item)
         save()
         return item
@@ -302,7 +310,7 @@ final class KoshStore {
 
     /// Turns a reviewed bank transaction into an entry. Returns nil if it was already added (e.g. "Add all" tapped twice).
     @discardableResult
-    func confirmInbox(_ item: InboxItem, categoryId: String?) -> Entry? {
+    func confirmInbox(_ item: InboxItem, categoryId: String?, incomeSource: String? = nil) -> Entry? {
         guard data.inbox.contains(where: { $0.id == item.id && $0.isLive }) else { return nil }
         if data.liveEntries.contains(where: { e in (item.txnKey != nil && e.txnKey == item.txnKey) || (item.gmailId != nil && e.gmailId == item.gmailId) }) {
             tombstone(\.inbox, item.id); save(); return nil
@@ -321,6 +329,11 @@ final class KoshStore {
         e.applied = (e.cardId != nil || e.debtId != nil) && item.backfill != true
         e.txnKey = item.txnKey
         e.gmailId = item.gmailId
+        if item.type == "income" {
+            e.incomeSource = incomeSource ?? item.incomeSource
+            // "This sender is family": remember the name so their next transfer is sorted automatically.
+            if incomeSource == "family", item.incomeSource != "family" { markFamily(item.merchant) }
+        }
         tombstone(\.inbox, item.id)
         saveEntry(e, previous: nil)
         return e

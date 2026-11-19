@@ -64,8 +64,11 @@ const sum = (arr, f) => arr.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 export function monthSummary(state, mk) {
   const es = live(state.entries).filter((e) => monthKey(e.date) === mk);
   const incomeEntries = sum(es.filter((e) => e.type === 'income'), (e) => e.amount);
-  const salary = Number(state.settings.salary) || 0;
-  const income = incomeEntries > 0 ? incomeEntries : salary;
+  const isSalary = (e) => e.incomeSource ? e.incomeSource === 'salary' : /\b(salary|sal|payroll|stipend)\b/i.test(e.note || '');
+  const salaryEntries = sum(es.filter((e) => e.type === 'income' && isSalary(e)), (e) => e.amount);
+  // Saved salary counts until the real salary arrives; family money, refunds etc. add on top.
+  const salary = salaryEntries > 0 ? salaryEntries : (Number(state.settings.salary) || 0);
+  const income = salary + (incomeEntries - salaryEntries);
   // Paying a credit card bill isn't new spending: the purchases were counted when you made them.
   const cardIds = new Set((state.debts || []).filter((d) => !d.deleted && d.kind === 'card').map((d) => d.id));
   const spending = (e) => e.type === 'expense' && !(e.debtId && cardIds.has(e.debtId));
@@ -74,7 +77,7 @@ export function monthSummary(state, mk) {
   const invested = sum(es.filter((e) => e.type === 'invest'), (e) => e.amount);
   const byCat = {};
   for (const e of es.filter(spending)) byCat[e.categoryId || 'other'] = (byCat[e.categoryId || 'other'] || 0) + Number(e.amount);
-  return { entries: es, income, incomeKnown: income > 0, incomeFromEntries: incomeEntries > 0, spent, saved, invested, left: income - spent - saved - invested, byCat };
+  return { entries: es, income, salaryIncome: salary, extraIncome: incomeEntries - salaryEntries, incomeKnown: income > 0, incomeFromEntries: incomeEntries > 0, spent, saved, invested, left: income - spent - saved - invested, byCat };
 }
 
 export function cardUsage(state) {
@@ -126,7 +129,8 @@ export function buildPlan(state, today = new Date()) {
   const budgeted = sum(cats, (c) => c.budget);
   const sips = sum(live(state.investments), (i) => i.monthly);
   const emis = sum(live(state.debts).filter((d) => d.kind !== 'card'), (d) => d.emi);
-  const free = ms.income - budgeted - sips - emis;
+  const planIncome = ms.salaryIncome > 0 ? ms.salaryIncome : ms.income; // plan around salary only
+  const free = planIncome - budgeted - sips - emis;
   let pool = free;
   // Several goals can target the same debt (e.g. cards under 30%, then under 10%).
   // Money given to an earlier one already counts toward the later one.
@@ -140,5 +144,5 @@ export function buildPlan(state, today = new Date()) {
     givenTo[key] = (givenTo[key] || 0) + want;
     return { goal: g, st, want, give };
   });
-  return { income: ms.income, incomeKnown: ms.incomeKnown, budgeted, sips, emis, free, goals, leftover: pool };
+  return { income: planIncome, incomeKnown: planIncome > 0, budgeted, sips, emis, free, goals, leftover: pool };
 }

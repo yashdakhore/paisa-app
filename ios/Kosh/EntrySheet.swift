@@ -34,6 +34,7 @@ struct EntrySheet: View {
     @State private var goalId = ""
     @State private var investmentId = ""
     @State private var paidWith = ""            // credit card id, "" = cash/UPI/debit
+    @State private var incomeSource = ""        // "" = let Kosh guess from the note
     @State private var note = ""
     @State private var reduceDebt = true
     @State private var repeatMonthly = false
@@ -118,6 +119,14 @@ struct EntrySheet: View {
         }
         field("Type") {
             Picker("Type", selection: $type) { ForEach(EntryType.allCases) { Text($0.label).tag($0) } }
+        }
+        if type == .income {
+            field("From") {
+                Picker("From", selection: $incomeSource) {
+                    Text("Kosh decides (\(AppData.incomeSourceName(AppData.guessIncomeSource(note + " " + text, myName: d.settings.myName, familyNames: d.settings.familyNames ?? []))))").tag("")
+                    ForEach(AppData.incomeSources, id: \.id) { Text($0.name).tag($0.id) }
+                }
+            }
         }
         if type == .expense {
             field("Category", unsure: unsureCategory) {
@@ -319,6 +328,7 @@ struct EntrySheet: View {
             goalId = e.goalId ?? ""
             investmentId = e.investmentId ?? ""
             paidWith = e.cardId ?? ""
+            incomeSource = e.incomeSource ?? ""
             note = e.note ?? ""
             return
         }
@@ -371,6 +381,7 @@ struct EntrySheet: View {
         e.goalId = (type == .save && !goalId.isEmpty) ? goalId : nil
         e.investmentId = (type == .invest && !investmentId.isEmpty) ? investmentId : nil
         e.cardId = (type == .expense && categoryId != "debt" && !paidWith.isEmpty) ? paidWith : nil
+        e.incomeSource = type == .income ? (incomeSource.isEmpty ? AppData.guessIncomeSource(note + " " + text, myName: store.data.settings.myName, familyNames: store.data.settings.familyNames ?? []) : incomeSource) : nil
         if existing == nil {
             e.applied = type == .expense ? ((e.debtId != nil && reduceDebt) || e.cardId != nil) : (e.goalId != nil || e.investmentId != nil)
         } else if e.cardId != nil {

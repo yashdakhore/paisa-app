@@ -129,7 +129,8 @@ function extractAmount(text) {
 }
 
 function detectType(t) {
-  if (/\b(salary|received|income|got paid|credited|bonus|refund)\b/.test(t)) return 'income';
+  if (/\b(salary|received|income|got paid|credited|bonus|refund|cashback|sent me|gave me|bheje|bheja|mile|mila|mili)\b/.test(t)) return 'income';
+  if (/\b(mom|mum|mummy|maa|mother|dad|papa|pappa|father|bhai|bhaiya|didi|sister|brother|nana|nani|dada|dadi)\s+(sent|gave|ne|transferred)\b|\bfrom\s+(mom|mum|mummy|maa|mother|dad|papa|pappa|father|bhai|bhaiya|didi|sister|brother|nana|nani|dada|dadi)\b/.test(t)) return 'income';
   if (/\b(invest(ed)?|sip|mutual fund|fd|fixed deposit|stocks?|shares|ppf|nps|gold)\b/.test(t)) return 'invest';
   if (/\b(saved|save|emergency fund|savings)\b/.test(t)) return 'save';
   return 'expense';

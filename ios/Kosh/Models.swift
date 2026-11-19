@@ -18,6 +18,7 @@ struct AppSettings: Codable, Equatable {
     var updatedAt: Double?
     var myName: String?         // money you send to yourself (another of your accounts) isn't spending
     var fixedCosts: [FixedCost]? // what you pay every month no matter what (from Suggest my budget)
+    var familyNames: [String]?  // senders you marked as family ("Aastha", "Sanskar Dakhore")
 }
 
 struct Category: Syncable, Hashable {
@@ -61,6 +62,7 @@ struct Entry: Syncable, Hashable {
     var updatedAt: Double?
     var deleted: Bool?
     var cardId: String?         // paid with this credit card: the purchase adds to the card's balance
+    var incomeSource: String?   // money in: salary | family | refund | interest | other (guessed from the note if empty)
     var txnKey: String?         // scrambled bank reference / fingerprint, so one transaction is never added twice
     var gmailId: String?        // the alert email it came from
 }
@@ -78,6 +80,7 @@ struct InboxItem: Syncable, Hashable {
     var maybeDuplicate: Bool?   // same amount and day as one already seen (e.g. both the SMS and the email arrived)
     var txnKey: String?
     var gmailId: String?
+    var incomeSource: String?
     var backfill: Bool?         // from a month fetch: already part of the card balances you entered
     var updatedAt: Double?
     var deleted: Bool?

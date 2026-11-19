@@ -200,6 +200,33 @@ _ = ws.confirmInbox(old, categoryId: nil)
 eq(ws.data.debts[0].balance, 2835, "month fetch spend doesn't change card balance")
 eq(ws.data.monthSummary(monthKey(Date())).spent, 1235, "but it still counts as spending")
 
+// 3j. Income sources: salary counts once, family money adds on top, plan uses salary only.
+let fs = KoshStore()
+fs.data = AppData.empty()
+fs.data.settings.salary = 25000
+fs.data.settings.myName = "Asha Kumar"
+let fd = Parser.iso(Date())
+let mk = monthKey(Date())
+let mom = fs.addBankMessage("You have received ₹2000 via UPI in your account. Transaction date \(fd) From SUNITA KUMAR RRN 600000000011")!
+eq(mom.incomeSource, "family", "same surname = family")
+_ = fs.confirmInbox(mom, categoryId: nil)
+var ms = fs.data.monthSummary(mk)
+eq(ms.income, 27000, "saved salary + family before salary arrives")
+eq(ms.extraIncome, 2000, "family is extra")
+let sal = fs.addBankMessage("Your A/C XX0000 Credited INR 25500.00 on \(fd) by NEFT SALARY ACME CORP. Avl Bal INR 30000 RRN 600000000012")!
+eq(sal.incomeSource, "salary", "salary detected")
+_ = fs.confirmInbox(sal, categoryId: nil)
+ms = fs.data.monthSummary(mk)
+eq(ms.income, 27500, "real salary replaces saved one, family still added")
+eq(fs.data.buildPlan().income, 25500, "plan uses salary only")
+let friend = fs.addBankMessage("You have received ₹500 via UPI. Transaction date \(fd) From RAVI SHARMA RRN 600000000013")!
+eq(friend.incomeSource, "other", "stranger is other")
+_ = fs.confirmInbox(friend, categoryId: nil, incomeSource: "family")
+eq(fs.data.settings.familyNames ?? [], ["Ravi Sharma"], "marked as family is remembered")
+eq(AppData.guessIncomeSource("RAVI SHARMA", myName: "Asha Kumar", familyNames: ["Ravi Sharma"]), "family", "next time sorted automatically")
+eq(fs.parse("mom sent 2000").type, "income", "voice: mom sent is money in")
+eq(AppData.guessIncomeSource("mom sent", myName: nil, familyNames: []), "family", "voice: mom is family")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

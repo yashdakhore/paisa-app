@@ -7,6 +7,7 @@ struct InboxCard: View {
     @Environment(KoshStore.self) private var store
     @Environment(Router.self) private var router
     @State private var chosen: [String: String] = [:]   // inbox id -> category
+    @State private var sources: [String: String] = [:]  // inbox id -> income source
 
     var body: some View {
         let items = store.liveInbox
@@ -19,7 +20,7 @@ struct InboxCard: View {
                 }
                 if items.count > 1 {
                     Button {
-                        let ids = items.compactMap { store.confirmInbox($0, categoryId: chosen[$0.id])?.id }
+                        let ids = items.compactMap { store.confirmInbox($0, categoryId: chosen[$0.id], incomeSource: sources[$0.id])?.id }
                         let s = store
                         router.show("Added \(ids.count) from your bank") { s.deleteEntries(ids) }
                     } label: { Label("Add all \(items.count)", systemImage: "checkmark") }
@@ -50,6 +51,16 @@ struct InboxCard: View {
                 Text((item.type == "income" ? "+" : "−") + inr(item.amount)).font(.num(16, .semibold)).foregroundStyle(item.type == "income" ? K.good : K.text)
             }
             HStack(spacing: 8) {
+                if item.type == "income" {
+                    let src = sources[item.id] ?? item.incomeSource ?? "other"
+                    Menu {
+                        ForEach(AppData.incomeSources, id: \.id) { s in Button(s.name) { sources[item.id] = s.id } }
+                    } label: {
+                        Label(AppData.incomeSourceName(src), systemImage: "chevron.up.chevron.down")
+                            .font(.system(size: 13, weight: .medium)).padding(.horizontal, 12).frame(minHeight: 36)
+                            .background(K.surface2, in: Capsule())
+                    }
+                }
                 if item.type == "expense" {
                     Menu {
                         ForEach(d.liveCategories) { c in Button(c.name) { chosen[item.id] = c.id } }
@@ -66,7 +77,7 @@ struct InboxCard: View {
                 }
                 .accessibilityLabel("Discard \(item.merchant)")
                 Button {
-                    guard let e = store.confirmInbox(item, categoryId: item.type == "expense" ? cat : nil) else { return }
+                    guard let e = store.confirmInbox(item, categoryId: item.type == "expense" ? cat : nil, incomeSource: sources[item.id]) else { return }
                     let s = store
                     router.show("Added \(inr(item.amount)) · \(item.merchant)") { s.deleteEntries([e.id]) }
                 } label: {

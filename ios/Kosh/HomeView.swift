@@ -44,6 +44,15 @@ struct HomeView: View {
                     }
                     .foregroundStyle(.white).padding(.top, 12)
                 }
+                if ms.extraIncome > 0 {
+                    let parts = AppData.incomeSources.compactMap { src -> String? in
+                        let v = src.id == "salary" ? ms.salaryIncome : (ms.bySource[src.id] ?? 0)
+                        return v > 0 ? "\(src.id == "refund" ? "Refunds" : src.name) \(inr(v))" : nil
+                    }
+                    Text(parts.joined(separator: " + "))
+                        .font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.85))
+                        .padding(.top, 14).lineLimit(2)
+                }
                 HStack(spacing: 8) {
                     HeroStat(label: "Income", value: inr(ms.income))
                     HeroStat(label: "Spent", value: inr(ms.spent))

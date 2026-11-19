@@ -9,7 +9,10 @@ func monthKey(_ d: Date) -> String { String(Parser.iso(d).prefix(7)) }
 
 struct MonthSummary {
     var entries: [Entry]
-    var income: Double
+    var income: Double          // salary (logged, or your saved figure until it arrives) + everything extra
+    var salaryIncome: Double = 0
+    var extraIncome: Double = 0 // family, refunds, interest, other: adds to this month, never replaces salary
+    var bySource: [String: Double] = [:]
     var incomeKnown: Bool
     var incomeFromEntries: Bool
     var spent: Double
@@ -72,16 +75,45 @@ extension AppData {
 
     func monthSummary(_ mk: String) -> MonthSummary {
         let es = liveEntries.filter { monthKey($0.date) == mk }
-        let incomeEntries = es.filter { $0.type == "income" }.reduce(0) { $0 + $1.amount }
-        let salary = settings.salary ?? 0
-        let income = incomeEntries > 0 ? incomeEntries : salary
+        var bySource: [String: Double] = [:]
+        for e in es where e.type == "income" { bySource[incomeSource(e), default: 0] += e.amount }
+        let incomeEntries = bySource.values.reduce(0, +)
+        // Your saved salary counts until the real salary credit arrives; then the real amount replaces it.
+        let salary = (bySource["salary"] ?? 0) > 0 ? bySource["salary"]! : (settings.salary ?? 0)
+        let extra = incomeEntries - (bySource["salary"] ?? 0)
+        let income = salary + extra
         let spent = es.filter { $0.type == "expense" && !isCardPayment($0) }.reduce(0) { $0 + $1.amount }
         let saved = es.filter { $0.type == "save" }.reduce(0) { $0 + $1.amount }
         let invested = es.filter { $0.type == "invest" }.reduce(0) { $0 + $1.amount }
         var byCat: [String: Double] = [:]
         for e in es where e.type == "expense" && !isCardPayment(e) { byCat[e.categoryId ?? "other", default: 0] += e.amount }
-        return MonthSummary(entries: es, income: income, incomeKnown: income > 0, incomeFromEntries: incomeEntries > 0,
+        return MonthSummary(entries: es, income: income, salaryIncome: salary, extraIncome: extra, bySource: bySource,
+                            incomeKnown: income > 0, incomeFromEntries: incomeEntries > 0,
                             spent: spent, saved: saved, invested: invested, left: income - spent - saved - invested, byCat: byCat)
+    }
+
+    static let incomeSources: [(id: String, name: String)] = [("salary", "Salary"), ("family", "Family"), ("refund", "Refund / cashback"),
+                                                                  ("interest", "Interest"), ("other", "Other")]
+    static func incomeSourceName(_ id: String) -> String { incomeSources.first { $0.id == id }?.name ?? "Other" }
+
+    /// Where money in came from, guessed from the note or sender when you haven't said.
+    static func guessIncomeSource(_ text: String, myName: String?, familyNames: [String]) -> String {
+        let t = " " + text.lowercased() + " "
+        if Parser.test("\\b(salary|sal|payroll|stipend|tankhwa|pagar)\\b", t) { return "salary" }
+        if Parser.test("\\b(refund|cashback|reversal|reversed|refunded)\\b", t) { return "refund" }
+        if Parser.test("\\b(interest|int\\.? ?pd|int cr)\\b", t) { return "interest" }
+        if Parser.test("\\b(mom|mum|mummy|maa|mother|dad|papa|pappa|father|bhai|bhaiya|didi|sister|brother|family|ghar se|nana|nani|dada|dadi|chacha|mama|uncle|aunty)\\b", t) { return "family" }
+        let words = Set(t.components(separatedBy: CharacterSet.letters.inverted).filter { $0.count >= 3 })
+        for f in familyNames {
+            let fw = f.lowercased().components(separatedBy: CharacterSet.letters.inverted).filter { $0.count >= 3 }
+            if !fw.isEmpty, fw.allSatisfy({ words.contains($0) }) { return "family" }
+        }
+        if let surname = myName?.lowercased().split(separator: " ").last.map(String.init), surname.count >= 3, words.contains(surname) { return "family" }
+        return "other"
+    }
+
+    func incomeSource(_ e: Entry) -> String {
+        e.incomeSource ?? AppData.guessIncomeSource(e.note ?? "", myName: settings.myName, familyNames: settings.familyNames ?? [])
     }
 
     func cardUsage() -> CardUsage {
@@ -136,7 +168,9 @@ extension AppData {
         let budgeted = liveCategories.filter { $0.id != "debt" }.reduce(0) { $0 + ($1.budget ?? 0) }
         let sips = liveInvestments.reduce(0) { $0 + ($1.monthly ?? 0) }
         let emis = liveDebts.filter { $0.kind != "card" }.reduce(0) { $0 + ($1.emi ?? 0) }
-        let free = ms.income - budgeted - sips - emis
+        // Plan around salary only: family money and refunds aren't promised every month.
+        let planIncome = ms.salaryIncome > 0 ? ms.salaryIncome : ms.income
+        let free = planIncome - budgeted - sips - emis
         var pool = free
         var givenTo: [String: Double] = [:]   // goals on the same debt share money
         let rows = liveGoals.map { g -> PlanRow in
@@ -148,7 +182,7 @@ extension AppData {
             givenTo[key, default: 0] += want
             return PlanRow(goal: g, st: st, want: want, give: give)
         }
-        return Plan(income: ms.income, incomeKnown: ms.incomeKnown, budgeted: budgeted, sips: sips, emis: emis, free: free, goals: rows, leftover: pool)
+        return Plan(income: planIncome, incomeKnown: planIncome > 0, budgeted: budgeted, sips: sips, emis: emis, free: free, goals: rows, leftover: pool)
     }
 }
 

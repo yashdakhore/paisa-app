@@ -220,7 +220,8 @@ enum Parser {
     }
 
     static func detectType(_ t: String) -> String {
-        if test("\\b(salary|received|income|got paid|credited|bonus|refund)\\b", t) { return "income" }
+        if test("\\b(salary|received|income|got paid|credited|bonus|refund|cashback|sent me|gave me|bheje|bheja|bhejе|mile|mila|mili)\\b", t) { return "income" }
+        if test("\\b(mom|mum|mummy|maa|mother|dad|papa|pappa|father|bhai|bhaiya|didi|sister|brother|nana|nani|dada|dadi)\\s+(sent|gave|ne|transferred)\\b|\\bfrom\\s+(mom|mum|mummy|maa|mother|dad|papa|pappa|father|bhai|bhaiya|didi|sister|brother|nana|nani|dada|dadi)\\b", t) { return "income" }
         if test("\\b(invest(ed)?|sip|mutual fund|fd|fixed deposit|stocks?|shares|ppf|nps|gold)\\b", t) { return "invest" }
         if test("\\b(saved|save|emergency fund|savings)\\b", t) { return "save" }
         return "expense"
