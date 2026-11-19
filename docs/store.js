@@ -66,11 +66,14 @@ export function monthSummary(state, mk) {
   const incomeEntries = sum(es.filter((e) => e.type === 'income'), (e) => e.amount);
   const salary = Number(state.settings.salary) || 0;
   const income = incomeEntries > 0 ? incomeEntries : salary;
-  const spent = sum(es.filter((e) => e.type === 'expense'), (e) => e.amount);
+  // Paying a credit card bill isn't new spending: the purchases were counted when you made them.
+  const cardIds = new Set((state.debts || []).filter((d) => !d.deleted && d.kind === 'card').map((d) => d.id));
+  const spending = (e) => e.type === 'expense' && !(e.debtId && cardIds.has(e.debtId));
+  const spent = sum(es.filter(spending), (e) => e.amount);
   const saved = sum(es.filter((e) => e.type === 'save'), (e) => e.amount);
   const invested = sum(es.filter((e) => e.type === 'invest'), (e) => e.amount);
   const byCat = {};
-  for (const e of es.filter((x) => x.type === 'expense')) byCat[e.categoryId || 'other'] = (byCat[e.categoryId || 'other'] || 0) + Number(e.amount);
+  for (const e of es.filter(spending)) byCat[e.categoryId || 'other'] = (byCat[e.categoryId || 'other'] || 0) + Number(e.amount);
   return { entries: es, income, incomeKnown: income > 0, incomeFromEntries: incomeEntries > 0, spent, saved, invested, left: income - spent - saved - invested, byCat };
 }
 

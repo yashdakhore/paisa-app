@@ -108,6 +108,36 @@ eq(vs.answer(.afford(1_000_000)).hasPrefix("Not this month"), true, "voice: can'
 eq(vs.answer(.spent(query: "food", lastMonth: false)).contains("of your ₹6,000 budget"), true, "voice: spent vs budget")
 eq(vs.answer(.score), "Your latest scores: CIBIL 760.", "voice: score answer")
 
+// 3e. Card bill payments don't count as spending; stuck "Other" bank entries get re-sorted.
+let cs = KoshStore()
+cs.data = AppData.empty()
+cs.data.debts = [Debt(id: "c", name: "IDFC Card", kind: "card", balance: 5000), Debt(id: "l", name: "Bike loan", kind: "loan", balance: 50000)]
+let today = Parser.iso(Date())
+cs.saveEntry(Entry(id: "p1", type: "expense", amount: 400, date: today, note: "Eternal", categoryId: "other", source: "bank sms"), previous: nil)
+cs.saveEntry(Entry(id: "p2", type: "expense", amount: 1500, date: today, categoryId: "debt", debtId: "c"), previous: nil)
+cs.saveEntry(Entry(id: "p3", type: "expense", amount: 3000, date: today, categoryId: "debt", debtId: "l"), previous: nil)
+eq(cs.data.monthSummary(monthKey(Date())).spent, 3400, "card payment not spending, loan EMI is")
+eq(cs.recategorizeBankEntries(), 1, "one bank entry re-sorted")
+eq(cs.data.entries.first { $0.id == "p1" }?.categoryId, "food", "eternal is food")
+
+// 3f. Delete all transactions: entries and inbox go, balances go back, everything else stays.
+let ds = KoshStore()
+ds.data = AppData.empty()
+ds.data.debts = [Debt(id: "c", name: "SBI Card", kind: "card", balance: 1000)]
+ds.data.goals = [Goal(id: "g", name: "Bike", kind: "save", target: 50000, saved: 0)]
+ds.data.settings.salary = 30000
+var buy = Entry(id: "b", type: "expense", amount: 500, date: Parser.iso(Date()), categoryId: "food"); buy.cardId = "c"; buy.applied = true
+ds.saveEntry(buy, previous: nil)
+var sv = Entry(id: "s", type: "save", amount: 2000, date: Parser.iso(Date()), goalId: "g"); sv.applied = true
+ds.saveEntry(sv, previous: nil)
+_ = ds.addBankMessage("Rs 99 spent on your SBI Credit Card at KFC on \(Parser.iso(Date()))")
+eq(ds.data.debts[0].balance, 1500, "before: card balance raised")
+let cleared = ds.deleteAllTransactions()
+eq(cleared.count, 2, "two entries deleted")
+eq(ds.data.liveEntries.count, 0, "no entries left"); eq(ds.liveInbox.count, 0, "inbox empty")
+eq(ds.data.debts[0].balance, 1000, "card balance back"); eq(ds.data.goals[0].saved, 0, "goal saved back")
+eq(ds.data.settings.salary, 30000, "salary kept"); eq(ds.data.liveDebts.count, 1, "card kept"); eq(ds.data.liveGoals.count, 1, "goal kept")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

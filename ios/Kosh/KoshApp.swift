@@ -197,6 +197,7 @@ struct RootView: View {
             }
             if phase == .active {
                 lock.unlock()
+                store.recategorizeBankEntries()
                 Task {
                     await GmailService.shared.check()
                     await SyncService.shared.syncNow(store)

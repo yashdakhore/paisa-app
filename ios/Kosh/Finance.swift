@@ -64,16 +64,22 @@ extension AppData {
 
     func category(_ id: String?) -> Category? { categories.first { $0.id == id } }
 
+    /// Paying a credit card bill isn't new spending: the purchases were counted when you made them.
+    func isCardPayment(_ e: Entry) -> Bool {
+        guard e.type == "expense", let id = e.debtId else { return false }
+        return debts.first { $0.id == id }?.kind == "card"
+    }
+
     func monthSummary(_ mk: String) -> MonthSummary {
         let es = liveEntries.filter { monthKey($0.date) == mk }
         let incomeEntries = es.filter { $0.type == "income" }.reduce(0) { $0 + $1.amount }
         let salary = settings.salary ?? 0
         let income = incomeEntries > 0 ? incomeEntries : salary
-        let spent = es.filter { $0.type == "expense" }.reduce(0) { $0 + $1.amount }
+        let spent = es.filter { $0.type == "expense" && !isCardPayment($0) }.reduce(0) { $0 + $1.amount }
         let saved = es.filter { $0.type == "save" }.reduce(0) { $0 + $1.amount }
         let invested = es.filter { $0.type == "invest" }.reduce(0) { $0 + $1.amount }
         var byCat: [String: Double] = [:]
-        for e in es where e.type == "expense" { byCat[e.categoryId ?? "other", default: 0] += e.amount }
+        for e in es where e.type == "expense" && !isCardPayment(e) { byCat[e.categoryId ?? "other", default: 0] += e.amount }
         return MonthSummary(entries: es, income: income, incomeKnown: income > 0, incomeFromEntries: incomeEntries > 0,
                             spent: spent, saved: saved, invested: invested, left: income - spent - saved - invested, byCat: byCat)
     }
@@ -159,7 +165,7 @@ func inr(_ v: Double?) -> String {
 
 extension AppData {
     func spent(in mk: String, category: String? = nil) -> Double {
-        liveEntries.filter { $0.type == "expense" && monthKey($0.date) == mk && (category == nil || ($0.categoryId ?? "other") == category) }
+        liveEntries.filter { $0.type == "expense" && !isCardPayment($0) && monthKey($0.date) == mk && (category == nil || ($0.categoryId ?? "other") == category) }
             .reduce(0) { $0 + $1.amount }
     }
 }

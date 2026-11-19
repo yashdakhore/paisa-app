@@ -283,6 +283,21 @@ final class KoshStore {
         return e
     }
 
+    /// Bank entries filed under Other get another look when Kosh learns new merchant words.
+    @discardableResult
+    func recategorizeBankEntries() -> Int {
+        var n = 0
+        for e in data.liveEntries where e.type == "expense" && e.source == "bank sms" && (e.categoryId ?? "other") == "other" && e.debtId == nil {
+            let p = parse(e.note ?? "")
+            if p.sureCategory, let c = p.categoryId, c != "other", c != "debt" {
+                var u = e; u.categoryId = c
+                upsert(\.entries, u); n += 1
+            }
+        }
+        if n > 0 { save() }
+        return n
+    }
+
     func discardInbox(_ item: InboxItem) { tombstone(\.inbox, item.id); save() }
 
     // MARK: - credit scores
@@ -353,6 +368,24 @@ final class KoshStore {
 
     func loadStartingPlan() {
         if let plan = KoshStore.bundledStartingPlan() { data = AppData.merge(data, plan); save() }
+    }
+
+    /// Deletes every entry and everything waiting in "From your bank", on all synced devices.
+    /// Card, loan and goal balances those entries changed are put back. Everything else stays.
+    /// A backup of the full data is saved first (Files → On My iPhone → Kosh).
+    @discardableResult
+    func deleteAllTransactions() -> (count: Int, backup: URL?) {
+        var backup: URL? = nil
+        if let raw = try? JSONEncoder().encode(data) {
+            let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("kosh-backup-before-clearing-\(Parser.iso(Date())).json")
+            if (try? raw.write(to: url, options: .atomic)) != nil { backup = url }
+        }
+        let ids = data.liveEntries.map(\.id)
+        deleteEntries(ids)
+        for i in data.inbox where i.isLive { tombstone(\.inbox, i.id) }
+        save()
+        return (ids.count, backup)
     }
 
     func eraseAll() {

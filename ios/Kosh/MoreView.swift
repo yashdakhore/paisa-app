@@ -7,6 +7,7 @@ struct MoreView: View {
     @Environment(Router.self) private var router
     @State private var importing = false
     @State private var confirmErase = false
+    @State private var confirmClear = false
     @State private var backupURL: URL?
     @State private var speechOnDevice = SpeechRecognizer().onDevice
     @State private var remindersOn = Reminders.enabled
@@ -114,6 +115,8 @@ struct MoreView: View {
                 CardHeader(title: "About")
                 Text("Kosh keeps your data on this iPhone. It never asks for card numbers, account numbers or PAN.").font(.system(size: 14)).foregroundStyle(K.muted)
                 Text("Version \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") · native iPhone app").font(.system(size: 13)).foregroundStyle(K.faint).padding(.top, 10)
+                Button(role: .destructive) { confirmClear = true } label: { Label("Delete all transactions", systemImage: "trash") }
+                    .buttonStyle(SecondaryButton(destructive: true)).padding(.top, 14)
                 Button(role: .destructive) { confirmErase = true } label: { Label("Erase data on this iPhone", systemImage: "trash") }
                     .buttonStyle(SecondaryButton(destructive: true)).padding(.top, 14)
             }
@@ -124,6 +127,14 @@ struct MoreView: View {
                 do { try store.importBackup(from: url); router.show("Backup restored") } catch { router.show("Restore failed: \(error.localizedDescription)") }
             case .failure(let e): router.show("Restore failed: \(e.localizedDescription)")
             }
+        }
+        .confirmationDialog("Delete all \(store.data.liveEntries.count) transactions?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Delete all transactions", role: .destructive) {
+                let r = store.deleteAllTransactions()
+                router.show("Deleted \(r.count) transactions" + (r.backup == nil ? "" : " · backup in Files → Kosh"))
+            }
+        } message: {
+            Text("Every expense, income, saving and investment entry is deleted on all your devices, and card and goal balances they changed go back. Cards, loans, goals, budgets, salary, sync and Gmail stay. A backup file is saved first; this can't be undone otherwise.")
         }
         .confirmationDialog("Erase all Kosh data on this iPhone? Backup files aren't affected.", isPresented: $confirmErase, titleVisibility: .visible) {
             Button("Erase", role: .destructive) { store.eraseAll(); router.show("Data erased") }
