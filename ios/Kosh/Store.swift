@@ -8,6 +8,9 @@ import WidgetKit
 final class KoshStore {
     var data: AppData
     var lastError: String?
+    /// Called after each local save (used to sync shortly after a change).
+    var onSaved: (() -> Void)?
+    private var fromSync = false
 
     private static var fileURL: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("kosh.json")
@@ -39,6 +42,15 @@ final class KoshStore {
             lastError = "Couldn't save: \(error.localizedDescription)"
         }
         writeWidgetSnapshot()
+        if !fromSync { onSaved?() }
+    }
+
+    /// Take the merged copy from a sync without triggering another sync.
+    func replaceFromSync(_ merged: AppData) {
+        fromSync = true
+        data = merged
+        save()
+        fromSync = false
     }
 
     /// Small summary for the Home Screen widget (only works when the App Group is available).
@@ -167,6 +179,13 @@ final class KoshStore {
                           investmentId: e.investmentId, day: day, active: true, lastAdded: monthKey(e.date))
         saveRecurring(r)
     }
+
+    // MARK: - credit scores
+
+    static let bureaus = ["CIBIL", "Experian", "Equifax", "CRIF"]
+    var liveScores: [CreditScore] { data.scores.filter(\.isLive).sorted { $0.date < $1.date } }
+    func saveScore(_ s: CreditScore) { upsert(\.scores, s); save() }
+    func deleteScore(_ id: String) { tombstone(\.scores, id); save() }
 
     func deleteEntries(_ ids: [String]) {
         for id in ids { if let e = data.entries.first(where: { $0.id == id && $0.isLive }) { applyEffects(e, sign: -1); tombstone(\.entries, id) } }

@@ -48,6 +48,12 @@ struct MoreView: View {
                 }
                 .tint(K.brand)
                 RowDivider()
+                Button { router.sheet = .sync } label: {
+                    ListRow(symbol: "arrow.triangle.2.circlepath.icloud", title: "Sync between devices",
+                            subtitle: SyncService.shared.isSignedIn ? (SyncService.shared.status.isEmpty ? "On · \(SyncService.shared.email)" : SyncService.shared.status) : "Off · keep iPhone, Mac and PC the same",
+                            chevron: true)
+                }.buttonStyle(.plain)
+                RowDivider()
                 Button { router.sheet = .recurringList } label: {
                     ListRow(symbol: "arrow.triangle.2.circlepath", title: "Repeating entries", subtitle: store.liveRecurring.isEmpty ? "Rent, recharge, SIP… added each month" : "\(store.liveRecurring.count) set up", chevron: true)
                 }.buttonStyle(.plain)

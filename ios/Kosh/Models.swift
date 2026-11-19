@@ -119,6 +119,17 @@ struct Recurring: Syncable, Hashable {
     var deleted: Bool?
 }
 
+/// A credit score from one bureau on one date (CIBIL, Experian, Equifax or CRIF; 300–900).
+struct CreditScore: Syncable, Hashable {
+    var id: String
+    var bureau: String
+    var score: Double
+    var date: String            // YYYY-MM-DD
+    var note: String?
+    var updatedAt: Double?
+    var deleted: Bool?
+}
+
 struct AppData: Codable {
     var settings = AppSettings(salary: nil, rule: nil, updatedAt: 0)
     var categories: [Category] = []
@@ -127,6 +138,7 @@ struct AppData: Codable {
     var goals: [Goal] = []
     var debts: [Debt] = []
     var recurring: [Recurring] = []
+    var scores: [CreditScore] = []
 
     init() {}
 
@@ -139,6 +151,7 @@ struct AppData: Codable {
         goals = try c.decodeIfPresent([Goal].self, forKey: .goals) ?? []
         debts = try c.decodeIfPresent([Debt].self, forKey: .debts) ?? []
         recurring = try c.decodeIfPresent([Recurring].self, forKey: .recurring) ?? []
+        scores = try c.decodeIfPresent([CreditScore].self, forKey: .scores) ?? []
     }
 
     static let defaultCategories: [(String, String)] = [
@@ -178,6 +191,7 @@ struct AppData: Codable {
         out.goals = m(a.goals, b.goals)
         out.debts = m(a.debts, b.debts)
         out.recurring = m(a.recurring, b.recurring)
+        out.scores = m(a.scores, b.scores)
         return out
     }
 }

@@ -58,6 +58,8 @@ struct HomeView: View {
                 quick("target", "Plan") { router.tab = .plan; router.planSeg = .month }
             }
 
+            SummaryCard()
+
             DueRecurringCard()
 
             CardUsageCard(showLink: true)

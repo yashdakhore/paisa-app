@@ -38,7 +38,10 @@ export function persist(state, storage = globalThis.localStorage) { storage.setI
 export function merge(a, b) {
   if (!a) return b; if (!b) return a;
   const out = { settings: (b.settings?.updatedAt || 0) > (a.settings?.updatedAt || 0) ? b.settings : a.settings };
-  for (const c of COLLECTIONS) {
+  // Merge every list, including ones only the iPhone app uses (repeating entries, credit scores),
+  // so syncing from the web never drops them.
+  const keys = new Set([...COLLECTIONS, ...Object.keys(a), ...Object.keys(b)].filter((k) => Array.isArray(a[k]) || Array.isArray(b[k])));
+  for (const c of keys) {
     const m = new Map();
     for (const it of [...(a[c] || []), ...(b[c] || [])]) {
       const cur = m.get(it.id);

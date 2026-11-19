@@ -91,6 +91,7 @@ struct PlanView: View {
             case .goals: GoalsList()
             case .debts: DebtsList()
             case .invest: InvestmentsList()
+            case .credit: CreditView()
             }
         }
     }

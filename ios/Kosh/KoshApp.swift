@@ -20,7 +20,7 @@ struct KoshApp: App {
 }
 
 enum Tab: String { case home, budget, plan, more }
-enum PlanSeg: String, CaseIterable { case month = "This month", goals = "Goals", debts = "Debts", invest = "Investments" }
+enum PlanSeg: String, CaseIterable { case month = "Month", goals = "Goals", debts = "Debts", invest = "Invest", credit = "Credit" }
 
 enum SheetRoute: Identifiable {
     case entry(Entry?, listen: Bool, text: String)
@@ -32,6 +32,9 @@ enum SheetRoute: Identifiable {
     case recurring(Recurring?)
     case recurringList
     case categoryDetail(Category)
+    case scores(String?)
+    case summary(String)
+    case sync
 
     var id: String {
         switch self {
@@ -44,6 +47,9 @@ enum SheetRoute: Identifiable {
         case .recurring(let r): return "rec-\(r?.id ?? "new")"
         case .recurringList: return "recurring-list"
         case .categoryDetail(let c): return "catdetail-\(c.id)"
+        case .scores(let b): return "scores-\(b ?? "all")"
+        case .summary(let mk): return "summary-\(mk)"
+        case .sync: return "sync"
         }
     }
 }
@@ -149,6 +155,9 @@ struct RootView: View {
                 case .recurring(let r): RecurringForm(existing: r)
                 case .recurringList: RecurringList()
                 case .categoryDetail(let c): CategoryDetail(category: c)
+                case .scores(let b): ScoreForm(focusBureau: b)
+                case .summary(let mk): MonthlySummary(month: mk)
+                case .sync: SyncSettings()
                 }
             }
             .environment(store)
@@ -170,7 +179,14 @@ struct RootView: View {
                 Reminders.reschedule(store.data)
                 if lock.enabled { router.sheet = nil; lock.lockNow() }
             }
-            if phase == .active { lock.unlock() }
+            if phase == .active {
+                lock.unlock()
+                Task { await SyncService.shared.syncNow(store) }
+            }
+        }
+        .task {
+            let s = store
+            store.onSaved = { SyncService.shared.syncSoon(s) }
         }
         .onAppear {
             if let t = pending.text, !t.isEmpty { router.newEntry(listen: false, text: t); pending.text = nil }

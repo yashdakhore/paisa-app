@@ -41,6 +41,14 @@ enum Reminders {
             }
         }
 
+        // Monthly summary on the 1st.
+        let sc = UNMutableNotificationContent()
+        sc.title = "Your monthly summary is ready"
+        sc.body = "See where last month's money went, debt paid, goals and credit scores."
+        sc.sound = .default
+        center.add(UNNotificationRequest(identifier: "summary", content: sc,
+                                         trigger: UNCalendarNotificationTrigger(dateMatching: DateComponents(day: 1, hour: 9), repeats: true)))
+
         for r in data.recurring where r.isLive && r.active != false {
             let c = UNMutableNotificationContent()
             c.title = "\(r.note) · \(inr(r.amount))"

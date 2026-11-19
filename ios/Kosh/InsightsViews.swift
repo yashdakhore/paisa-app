@@ -112,6 +112,11 @@ struct TrendsView: View {
                 }
             }
 
+            Button { router.sheet = .summary(mk) } label: {
+                Label("\(monthTitle(mk)) summary", systemImage: "doc.text.magnifyingglass")
+            }
+            .buttonStyle(SecondaryButton())
+
             Card {
                 CardHeader(title: "By category vs last month")
                 let rows = d.liveCategories.map { c -> (Category, Double, Double) in
