@@ -111,6 +111,19 @@ struct SMSSetup: View {
                     Text("If both the SMS and the email arrive, the second one is marked “Maybe already added” so you can discard it.")
                 }
                 Section {
+                    let d = UserDefaults.standard
+                    let when = d.double(forKey: "lastBankRun")
+                    if when > 0 {
+                        LabeledContent("When", value: Date(timeIntervalSince1970: when).formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent("Text received", value: "\(d.integer(forKey: "lastBankChars")) characters")
+                        LabeledContent("Result", value: d.string(forKey: "lastBankResult") ?? "—")
+                    } else {
+                        Text("No message from Shortcuts yet.").foregroundStyle(K.muted)
+                    }
+                } header: { Text("Last message from Shortcuts") } footer: {
+                    Text("If nothing shows here after an alert, the automation didn't run. If it shows only a few characters, Shortcuts sent just the subject.")
+                }
+                Section {
                     TextField("e.g. Asha Kumar", text: $myName).textInputAutocapitalization(.words).autocorrectionDisabled()
                         .onSubmit { store.saveMyName(myName) }
                         .onChange(of: myName) { _, v in store.saveMyName(v) }

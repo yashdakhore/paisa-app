@@ -28,7 +28,13 @@ struct AddBankMessageIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        if let item = KoshStore.shared.addBankMessage(message) {
+        let item = KoshStore.shared.addBankMessage(message)
+        // Only when it ran, how long the text was and the outcome — never the message itself.
+        let d = UserDefaults.standard
+        d.set(Date().timeIntervalSince1970, forKey: "lastBankRun")
+        d.set(message.count, forKey: "lastBankChars")
+        d.set(item == nil ? "no transaction found" : "added to review", forKey: "lastBankResult")
+        if let item {
             BudgetAlerts.notifyInbox(item)
             return .result(dialog: "Kosh: \(inr(item.amount)) \(item.type == "income" ? "from " : item.type == "payment" ? "· " : "at ")\(item.merchant) is ready to review.")
         }
