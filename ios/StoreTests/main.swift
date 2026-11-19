@@ -357,6 +357,16 @@ ls.data.inbox.append(InboxItem(id: "old1", type: "expense", amount: 640, merchan
 ls.flushInbox()
 eq(ls.liveInbox.count, 0, "nothing left waiting"); eq(ls.guesses.contains { $0.note == "Arjun Das" }, true, "old one is now a guess")
 
+// 3p. Salary credit labelled "Money received" stays salary, even when "Other" was saved on it.
+let svs = KoshStore()
+svs.data = AppData.empty()
+svs.data.settings.salary = 25600
+let salIt = svs.addBankMessage("Your A/C XX0000 Credited INR 25600.00 on \(Parser.iso(Date())). RRN 740000000001")!
+eq(svs.data.liveEntries.first { $0.id == salIt.autoAdded }?.incomeSource, "salary", "new salary credit filed as Salary")
+var oldSal = Entry(id: "os", type: "income", amount: 25600, date: Parser.iso(Date()), note: "Money received", source: "bank sms"); oldSal.incomeSource = "other"
+svs.data.entries = [oldSal]
+eq(svs.data.monthSummary(monthKey(Date())).income, 25600, "saved Other near salary still counts once as salary")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

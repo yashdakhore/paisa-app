@@ -294,7 +294,11 @@ final class KoshStore {
         item.gmailId = gmailId
         if manual { item.backfill = true }
         if t.isCash { item.isCash = true }
-        if t.type == "income" { item.incomeSource = AppData.guessIncomeSource(text + " " + merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? []) }
+        if t.type == "income" {
+            var src = AppData.guessIncomeSource(text + " " + merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
+            if src == "other", !t.isCash, data.looksLikeSalary(t.amount) { src = "salary" }
+            item.incomeSource = src
+        }
         let sure = classify(&item, text: text)
         upsert(\.inbox, item)
         // Zero-review: everything is added straight away with Kosh's best guess. Unsure ones are marked as guesses

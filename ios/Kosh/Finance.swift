@@ -115,11 +115,16 @@ extension AppData {
     }
 
     func incomeSource(_ e: Entry) -> String {
-        if let s = e.incomeSource { return s }
-        let g = AppData.guessIncomeSource(e.note ?? "", myName: settings.myName, familyNames: settings.familyNames ?? [])
-        // Banks often label the salary credit just "Money received": a credit close to your salary is your salary.
-        if g == "other", let sal = settings.salary, sal >= 5000, abs(e.amount - sal) <= sal * 0.15 { return "salary" }
+        let g = e.incomeSource ?? AppData.guessIncomeSource(e.note ?? "", myName: settings.myName, familyNames: settings.familyNames ?? [])
+        // Banks often label the salary credit just "Money received": anything filed as Other that's close to
+        // your salary is your salary (also when "Other" was saved as a guess).
+        if g == "other", looksLikeSalary(e.amount) { return "salary" }
         return g
+    }
+
+    func looksLikeSalary(_ amount: Double) -> Bool {
+        guard let sal = settings.salary, sal >= 5000 else { return false }
+        return abs(amount - sal) <= sal * 0.15
     }
 
     func cardUsage() -> CardUsage {
