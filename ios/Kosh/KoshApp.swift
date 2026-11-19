@@ -10,6 +10,7 @@ struct KoshApp: App {
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+        GmailService.registerBackground()
     }
 
     var body: some Scene {
@@ -42,6 +43,7 @@ enum SheetRoute: Identifiable {
     case sync
     case payoff
     case smsSetup
+    case gmail
 
     var id: String {
         switch self {
@@ -59,6 +61,7 @@ enum SheetRoute: Identifiable {
         case .sync: return "sync"
         case .payoff: return "payoff"
         case .smsSetup: return "sms"
+        case .gmail: return "gmail"
         }
     }
 }
@@ -169,6 +172,7 @@ struct RootView: View {
                 case .sync: SyncSettings()
                 case .payoff: PayoffPlanner()
                 case .smsSetup: SMSSetup()
+                case .gmail: GmailSetup()
                 }
             }
             .environment(store)
@@ -188,11 +192,15 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {
                 Reminders.reschedule(store.data)
+                if GmailService.shared.isConnected { GmailService.scheduleBackground() }
                 if lock.enabled { router.sheet = nil; lock.lockNow() }
             }
             if phase == .active {
                 lock.unlock()
-                Task { await SyncService.shared.syncNow(store) }
+                Task {
+                    await GmailService.shared.check()
+                    await SyncService.shared.syncNow(store)
+                }
             }
         }
         .task {

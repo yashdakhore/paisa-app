@@ -60,8 +60,13 @@ struct MoreView: View {
                 .tint(K.brand)
                 .id(budgetAlertsOn)
                 RowDivider()
+                Button { router.sheet = .gmail } label: {
+                    ListRow(symbol: "envelope.badge", title: "Connect Gmail",
+                            subtitle: GmailService.shared.isConnected ? "On · \(GmailService.shared.email)" : "Bank alert emails land in Kosh automatically", chevron: true)
+                }.buttonStyle(.plain)
+                RowDivider()
                 Button { router.sheet = .smsSetup } label: {
-                    ListRow(symbol: "message.badge", title: "Auto-add from bank SMS & email", subtitle: "Bank alerts land in Kosh for you to confirm", chevron: true)
+                    ListRow(symbol: "message.badge", title: "Auto-add with Shortcuts", subtitle: "Bank SMS (and email, if not using Connect Gmail)", chevron: true)
                 }.buttonStyle(.plain)
                 RowDivider()
                 Button { router.sheet = .sync } label: {

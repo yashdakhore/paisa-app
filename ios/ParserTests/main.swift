@@ -102,6 +102,28 @@ b = sms("Rs.150 paid to RAPIDO via super.money RuPay credit card on 18-11-26")
 eq(b?.cardHint, "supermoney", "supermoney hint")
 
 // learnable words
+// Gmail API messages → text.
+func b64url(_ s: String) -> String { Data(s.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
+let gjson = """
+{"id":"m1","internalDate":"1794983400000","payload":{"mimeType":"multipart/alternative","headers":[{"name":"Subject","value":"Debit Alert"}],
+ "parts":[{"mimeType":"text/html","body":{"data":"\(b64url("<p>INR 310.40 spent on your <b>IDFC FIRST BANK Credit Card</b> at IOCL on 18 NOV 2026</p>"))"}}]}}
+"""
+let gm = try! JSONDecoder().decode(GmailMessage.Message.self, from: Data(gjson.utf8))
+let gtext = GmailMessage.text(gm)
+eq(gtext.hasPrefix("Debit Alert\n"), true, "gmail subject first")
+b = sms(gtext)
+eq(b?.amount, 310.40, "gmail html amt"); eq(b?.merchant, "Iocl", "gmail html merchant"); eq(b?.cardHint, "idfc", "gmail html card")
+eq(GmailMessage.date(gm).map { Parser.iso($0) }, "2026-11-18", "gmail internal date")
+let gjson2 = """
+{"id":"m2","payload":{"mimeType":"multipart/alternative","headers":[],"parts":[
+ {"mimeType":"text/plain","body":{"data":"\(b64url("Rs 99 debited via UPI to Chai Point on 18-11-26"))"}},
+ {"mimeType":"text/html","body":{"data":"\(b64url("<p>ignored html</p>"))"}}]}}
+"""
+let gm2 = try! JSONDecoder().decode(GmailMessage.Message.self, from: Data(gjson2.utf8))
+eq(GmailMessage.text(gm2).contains("ignored html"), false, "plain text preferred")
+eq(sms(GmailMessage.text(gm2))?.merchant, "Chai Point", "gmail plain merchant")
+eq(GmailMessage.query(senders: ["a.com", " b.in ", ""], days: 3), "from:(a.com OR b.in) newer_than:3d", "gmail query")
+
 // Bank emails (made-up names and numbers, real layouts).
 b = sms("Dear Customer, INR 310.40 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on 18 NOV 2026 at 10:15 AM. Available Limit: INR 12,345.00. If not done by you, call us. Never share your OTP with anyone.")
 eq(b?.type, "expense", "idfc mail type"); eq(b?.amount, 310.40, "idfc mail amt"); eq(b?.merchant, "Iocl", "idfc mail merchant"); eq(b?.date, "2026-11-18", "idfc mail date"); eq(b?.cardHint, "idfc", "idfc mail card")

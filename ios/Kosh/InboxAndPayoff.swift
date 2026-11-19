@@ -99,8 +99,8 @@ struct SMSSetup: View {
                     step(4, "**Add Action** → search **Kosh** → **Add bank message**.")
                     step(5, "Tap the blue **Message** field and pick **Shortcut Input**. Tap **Done**.")
                     step(6, "Repeat for the subject words **debited**, **transaction** and **payment**.")
-                } header: { Text("Bank emails (most reliable)") } footer: {
-                    Text("Works with alert emails from SBI, IDFC, slice, BillDesk and most banks. The Mail app must have your Gmail added. Promotions and statements are ignored.")
+                } header: { Text("Bank emails with Shortcuts") } footer: {
+                    Text("Not needed if you use More → Connect Gmail. The Mail app must have your Gmail added. Promotions and statements are ignored.")
                 }
                 Section {
                     step(1, "Shortcuts → **Automation** → **+** → **Message**.")
