@@ -94,6 +94,13 @@ b = sms("Rs 299 paid to JIO via UPI on 18Nov26. UPI Ref 61234")
 eq(b?.amount, 299, "sms5 amt"); eq(b?.merchant, "Jio", "sms5 merchant"); eq(b?.date, "2026-11-18", "sms5 date")
 eq((b?.merchant ?? "").contains(where: \.isNumber), false, "no numbers kept")
 
+b = sms("You have spent Rs.640 at ZOMATO using your OneCard on 18-11-26.")
+eq(b?.cardHint, "onecard", "onecard hint"); eq(b?.merchant, "Zomato", "onecard merchant")
+b = sms("Rs 999 spent on your IDFC FIRST Bank Credit Card XX4321 at AMAZON on 17/11/26")
+eq(b?.cardHint, "idfc", "idfc hint")
+b = sms("Rs.150 paid to RAPIDO via super.money RuPay credit card on 18-11-26")
+eq(b?.cardHint, "supermoney", "supermoney hint")
+
 // learnable words
 eq(Parser.learnableWords("Rapido ride"), ["rapido"], "learn rapido")
 eq(Parser.learnableWords("Big Bazaar Pvt Ltd"), ["big", "bazaar"], "learn bazaar")

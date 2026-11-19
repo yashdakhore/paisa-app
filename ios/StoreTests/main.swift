@@ -49,6 +49,15 @@ _ = store.confirmInbox(item2, categoryId: "transport")
 eq(store.parse("300 zingbus").categoryId, "transport", "learned from inbox correction")
 eq(store.addBankMessage("Your OTP is 123456 for Rs 500", now: now) == nil, true, "otp ignored")
 
+// 3b. Several cards: the right one is picked from the message.
+store.data.debts += [Debt(id: "one", name: "OneCard", kind: "card", balance: 0, limit: 20000),
+                     Debt(id: "idfc", name: "IDFC First Card", kind: "card", balance: 0, limit: 30000),
+                     Debt(id: "sm", name: "Supermoney Card", kind: "card", balance: 0, limit: 10000)]
+eq(store.addBankMessage("You have spent Rs.640 at ZOMATO using your OneCard on \(Parser.iso(now)).", now: now.addingTimeInterval(1400))?.cardId, "one", "onecard matched")
+eq(store.addBankMessage("Rs 999 spent on your IDFC FIRST Bank Credit Card XX4321 at AMAZON on \(Parser.iso(now))", now: now.addingTimeInterval(2100))?.cardId, "idfc", "idfc matched")
+eq(store.addBankMessage("Rs.150 paid to RAPIDO via super.money RuPay credit card on \(Parser.iso(now))", now: now.addingTimeInterval(2800))?.cardId, "sm", "supermoney matched")
+eq(store.addBankMessage("Rs.250.00 spent on your SBI Credit Card ending 1234 at BLINKIT on \(Parser.iso(now)).", now: now.addingTimeInterval(3500))?.cardId, "sbi", "sbi still matched")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

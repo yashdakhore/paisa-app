@@ -221,8 +221,17 @@ final class KoshStore {
             && abs((ISO8601DateFormatter().date(from: $0.received!) ?? .distantPast).timeIntervalSince(now)) < 600 }) { return nil }
         let cat = t.type == "expense" ? (parse(t.merchant).sureCategory ? parse(t.merchant).categoryId : "other") : nil
         var cardId: String? = nil
+        let cards = data.liveDebts.filter { $0.kind == "card" }
+        func words(_ d: Debt) -> [String] {
+            (Parser.nameWords(d.name) + (d.keywords ?? []) + [d.name.lowercased().replacingOccurrences(of: " ", with: "")]).map { $0.lowercased() }
+        }
         if let hint = t.cardHint {
-            cardId = data.liveDebts.first { d in d.kind == "card" && (Parser.nameWords(d.name) + (d.keywords ?? [])).contains { $0.lowercased() == hint } }?.id
+            cardId = cards.first { words($0).contains(hint) || words($0).contains { $0.hasPrefix(hint) } }?.id
+        }
+        // Card names you added (e.g. "Supermoney", "IDFC") mentioned anywhere in a card alert.
+        if cardId == nil, t.type == "expense", text.lowercased().contains("card") {
+            let low = text.lowercased().replacingOccurrences(of: "super.money", with: "supermoney")
+            cardId = cards.first { d in words(d).contains { w in w.count >= 3 && !["card", "credit", "bank", "first"].contains(w) && low.contains(w) } }?.id
         }
         let item = InboxItem(id: newId(), type: t.type, amount: t.amount, merchant: t.merchant, date: t.date, categoryId: cat, cardId: cardId,
                              received: ISO8601DateFormatter().string(from: now))

@@ -13,7 +13,7 @@ enum BankSMS {
         var cardHint: String?   // bank name word when it was a credit card purchase, e.g. "sbi"
     }
 
-    static let banks = ["sbi", "hdfc", "icici", "axis", "kotak", "idfc", "yes", "au", "rbl", "indusind", "amex", "bob", "pnb", "canara", "onecard", "federal", "citi", "standard chartered"]
+    static let banks = ["sbi", "hdfc", "icici", "axis", "kotak", "idfc", "yes", "au", "rbl", "indusind", "amex", "bob", "pnb", "canara", "onecard", "one card", "supermoney", "super money", "federal", "citi", "standard chartered"]
 
     static func parse(_ raw: String, now: Date = Date()) -> Txn? {
         let text = raw.replacingOccurrences(of: "\n", with: " ")
@@ -38,8 +38,9 @@ enum BankSMS {
 
         // Credit card purchase → which bank's card.
         var cardHint: String? = nil
-        if type == "expense", t.contains("credit card") || t.range(of: "\\bcc\\b", options: .regularExpression) != nil {
-            cardHint = banks.first { t.range(of: "\\b\($0)\\b", options: .regularExpression) != nil }
+        if type == "expense", t.contains("credit card") || t.contains("onecard") || t.contains("one card") || t.contains("super.money") || t.contains("supermoney") || t.range(of: "\\bcc\\b", options: .regularExpression) != nil {
+            let tt = t.replacingOccurrences(of: "super.money", with: "supermoney")
+            cardHint = banks.first { tt.range(of: "\\b\($0)\\b", options: .regularExpression) != nil }?.replacingOccurrences(of: " ", with: "")
         }
 
         return Txn(type: type, amount: amount, merchant: merchant, date: smsDate(t, now: now), cardHint: cardHint)
@@ -54,7 +55,7 @@ enum BankSMS {
     }
 
     static func merchantName(_ text: String, credit: Bool) -> String? {
-        let stops = "(?:\\s+on\\s|\\s+ref|\\s+upi|\\s+avl|\\s+avail|\\s+bal|\\s+not\\s|\\s+if\\s|\\s+txn|\\s+via\\s|\\.\\s|\\(|\\s*$)"
+        let stops = "(?:\\s+on\\s|\\s+using\\s|\\s+with\\s|\\s+thru\\s|\\s+through\\s|\\s+by\\s|\\s+ref|\\s+upi|\\s+avl|\\s+avail|\\s+bal|\\s+not\\s|\\s+if\\s|\\s+txn|\\s+via\\s|\\.\\s|\\(|\\s*$)"
         let patterns: [String] = credit
             ? ["(?i)\\bfrom\\s+(?:vpa\\s+)?([A-Za-z0-9@._&' -]{2,40}?)" + stops, "(?i)\\bby\\s+(?:neft|imps|upi|rtgs)?[- ]*(?:from\\s+)?([A-Za-z0-9._&' -]{2,40}?)" + stops]
             : ["(?i)\\bat\\s+([A-Za-z0-9@._&'*/ -]{2,40}?)" + stops,
