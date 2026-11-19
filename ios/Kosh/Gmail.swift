@@ -189,6 +189,7 @@ final class GmailService: NSObject {
     struct Profile: Decodable { var emailAddress: String }
     struct MessageList: Decodable { struct Ref: Decodable { var id: String }; var messages: [Ref]?; var nextPageToken: String? }
     struct GmailError: Error { var message: String }
+    struct GErr: Decodable { struct E: Decodable { var message: String? }; var error: E? }
 
     private func token(_ form: [String: String]) async throws -> Token {
         var r = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
@@ -241,7 +242,6 @@ final class GmailService: NSObject {
                 wait *= 2
                 continue
             }
-            struct GErr: Decodable { struct E: Decodable { var message: String? }; var error: E? }
             let reason = (try? JSONDecoder().decode(GErr.self, from: data))?.error?.message ?? ""
             throw GmailError(message: "Gmail error \(code)" + (reason.isEmpty ? "." : ": \(reason.prefix(140))"))
         }
