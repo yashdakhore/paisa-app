@@ -156,3 +156,47 @@ func inr(_ v: Double?) -> String {
     let s = f.string(from: NSNumber(value: abs(v.rounded()))) ?? "\(Int(abs(v)))"
     return (v.rounded() < 0 ? "−" : "") + "₹" + s
 }
+
+extension AppData {
+    func spent(in mk: String, category: String? = nil) -> Double {
+        liveEntries.filter { $0.type == "expense" && monthKey($0.date) == mk && (category == nil || ($0.categoryId ?? "other") == category) }
+            .reduce(0) { $0 + $1.amount }
+    }
+}
+
+func ordinal(_ n: Int) -> String {
+    let t = n % 100
+    if (11...13).contains(t) { return "\(n)th" }
+    switch n % 10 { case 1: return "\(n)st"; case 2: return "\(n)nd"; case 3: return "\(n)rd"; default: return "\(n)th" }
+}
+
+struct PayoffResult {
+    var months: Int?            // nil = never paid off at this amount
+    var interest: Double
+    var points: [(Int, Double)] // month index, total balance
+}
+
+/// Month-by-month: add each debt's interest, then pay the monthly amount in priority order.
+func simulatePayoff(_ debts: [(balance: Double, apr: Double)], monthly: Double, avalanche: Bool) -> PayoffResult {
+    var bal = debts.map { $0 }
+    let order = bal.indices.sorted { avalanche ? bal[$0].apr > bal[$1].apr : bal[$0].balance < bal[$1].balance }
+    var interest = 0.0
+    var points: [(Int, Double)] = [(0, bal.reduce(0) { $0 + $1.balance })]
+    for month in 1...360 {
+        for i in bal.indices where bal[i].balance > 0 {
+            let it = bal[i].balance * bal[i].apr / 1200
+            bal[i].balance += it
+            interest += it
+        }
+        var pay = monthly
+        for i in order where pay > 0 && bal[i].balance > 0 {
+            let p = min(pay, bal[i].balance)
+            bal[i].balance -= p
+            pay -= p
+        }
+        let total = bal.reduce(0) { $0 + max(0, $1.balance) }
+        points.append((month, total))
+        if total < 1 { return PayoffResult(months: month, interest: interest, points: points) }
+    }
+    return PayoffResult(months: nil, interest: interest, points: points)
+}

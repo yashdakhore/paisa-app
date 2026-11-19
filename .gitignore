@@ -14,3 +14,5 @@ ios/build/
 ios/ParserTests/bin/
 *.xcuserstate
 xcuserdata/
+ios/StoreTests/bin/
+ios/StoreTests/tmp/

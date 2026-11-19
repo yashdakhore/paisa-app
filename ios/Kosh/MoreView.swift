@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UserNotifications
 
 struct MoreView: View {
     @Environment(KoshStore.self) private var store
@@ -9,6 +10,7 @@ struct MoreView: View {
     @State private var backupURL: URL?
     @State private var speechOnDevice = SpeechRecognizer().onDevice
     @State private var remindersOn = Reminders.enabled
+    @State private var budgetAlertsOn = BudgetAlerts.enabled
     @Environment(AppLock.self) private var lock
 
     var body: some View {
@@ -47,6 +49,20 @@ struct MoreView: View {
                     ListRow(symbol: "faceid", title: "Lock with \(lock.methodName)", subtitle: "Ask for \(lock.methodName) each time you open Kosh")
                 }
                 .tint(K.brand)
+                RowDivider()
+                Toggle(isOn: Binding(get: { BudgetAlerts.enabled }, set: { on in
+                    BudgetAlerts.enabled = on
+                    if on { Task { _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) } }
+                    budgetAlertsOn = on
+                })) {
+                    ListRow(symbol: "exclamationmark.triangle", title: "Budget alerts", subtitle: "When a category reaches 80% and 100% of its budget")
+                }
+                .tint(K.brand)
+                .id(budgetAlertsOn)
+                RowDivider()
+                Button { router.sheet = .smsSetup } label: {
+                    ListRow(symbol: "message.badge", title: "Auto-add from bank SMS", subtitle: "Set up a Shortcut so bank alerts land in Kosh to confirm", chevron: true)
+                }.buttonStyle(.plain)
                 RowDivider()
                 Button { router.sheet = .sync } label: {
                     ListRow(symbol: "arrow.triangle.2.circlepath.icloud", title: "Sync between devices",

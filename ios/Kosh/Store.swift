@@ -6,6 +6,9 @@ import WidgetKit
 /// (a card payment lowers that card's balance, savings raise a goal, and so on).
 @Observable
 final class KoshStore {
+    /// One shared store, so Siri and Shortcut actions see the same data as the app.
+    static let shared = KoshStore()
+
     var data: AppData
     var lastError: String?
     /// Called after each local save (used to sync shortly after a change).
@@ -103,6 +106,7 @@ final class KoshStore {
     // MARK: - entries
 
     func saveEntry(_ entry: Entry, previous: Entry?) {
+        if previous == nil { BudgetAlerts.check(entry, in: data) }
         if let previous { applyEffects(previous, sign: -1) }
         applyEffects(entry, sign: 1)
         upsert(\.entries, entry)
@@ -120,6 +124,9 @@ final class KoshStore {
         func bump(_ v: Double?, _ mult: Double) -> Double { max(0, (((v ?? 0) + sign * mult * e.amount) * 100).rounded() / 100) }
         if e.type == "expense", let id = e.debtId, let i = data.debts.firstIndex(where: { $0.id == id && $0.isLive }) {
             data.debts[i].balance = bump(data.debts[i].balance, -1); data.debts[i].updatedAt = nowMillis()
+        }
+        if e.type == "expense", e.debtId == nil, let id = e.cardId, let i = data.debts.firstIndex(where: { $0.id == id && $0.isLive }) {
+            data.debts[i].balance = bump(data.debts[i].balance, 1); data.debts[i].updatedAt = nowMillis()
         }
         if e.type == "save", let id = e.goalId, let i = data.goals.firstIndex(where: { $0.id == id && $0.isLive }) {
             data.goals[i].saved = bump(data.goals[i].saved, 1); data.goals[i].updatedAt = nowMillis()
@@ -180,6 +187,65 @@ final class KoshStore {
         saveRecurring(r)
     }
 
+    // MARK: - learning
+
+    /// Remember that these words mean this category (from a correction you made).
+    @discardableResult
+    func learn(from text: String, categoryId: String) -> [String] {
+        let words = Parser.learnableWords(text)
+        guard !words.isEmpty, data.categories.contains(where: { $0.id == categoryId && $0.isLive }) else { return [] }
+        for i in data.categories.indices {
+            var c = data.categories[i]
+            let before = c.learned ?? []
+            if c.id == categoryId {
+                c.learned = Array(Set(before + words)).sorted()
+            } else {
+                c.learned = before.filter { !words.contains($0) }
+            }
+            if (c.learned ?? []) != before { c.updatedAt = nowMillis(); data.categories[i] = c }
+        }
+        save()
+        return words
+    }
+
+    // MARK: - bank SMS inbox
+
+    var liveInbox: [InboxItem] { data.inbox.filter(\.isLive).sorted { ($0.received ?? "") > ($1.received ?? "") } }
+
+    /// Read a bank/card message and queue it for review. Returns nil if it isn't a transaction or is a duplicate.
+    @discardableResult
+    func addBankMessage(_ text: String, now: Date = Date()) -> InboxItem? {
+        guard let t = BankSMS.parse(text, now: now) else { return nil }
+        // Banks sometimes send the same alert twice.
+        if data.inbox.contains(where: { $0.amount == t.amount && $0.date == t.date && $0.merchant == t.merchant && !($0.received ?? "").isEmpty
+            && abs((ISO8601DateFormatter().date(from: $0.received!) ?? .distantPast).timeIntervalSince(now)) < 600 }) { return nil }
+        let cat = t.type == "expense" ? (parse(t.merchant).sureCategory ? parse(t.merchant).categoryId : "other") : nil
+        var cardId: String? = nil
+        if let hint = t.cardHint {
+            cardId = data.liveDebts.first { d in d.kind == "card" && (Parser.nameWords(d.name) + (d.keywords ?? [])).contains { $0.lowercased() == hint } }?.id
+        }
+        let item = InboxItem(id: newId(), type: t.type, amount: t.amount, merchant: t.merchant, date: t.date, categoryId: cat, cardId: cardId,
+                             received: ISO8601DateFormatter().string(from: now))
+        upsert(\.inbox, item)
+        save()
+        return item
+    }
+
+    @discardableResult
+    func confirmInbox(_ item: InboxItem, categoryId: String?) -> Entry {
+        var e = Entry(id: newId(), type: item.type, amount: item.amount, date: item.date, note: item.merchant,
+                      categoryId: item.type == "expense" ? (categoryId ?? item.categoryId ?? "other") : nil,
+                      createdAt: ISO8601DateFormatter().string(from: Date()), source: "bank sms")
+        e.cardId = item.type == "expense" ? item.cardId : nil
+        e.applied = e.cardId != nil
+        if let c = categoryId, c != item.categoryId { learn(from: item.merchant, categoryId: c) }
+        tombstone(\.inbox, item.id)
+        saveEntry(e, previous: nil)
+        return e
+    }
+
+    func discardInbox(_ item: InboxItem) { tombstone(\.inbox, item.id); save() }
+
     // MARK: - credit scores
 
     static let bureaus = ["CIBIL", "Experian", "Equifax", "CRIF"]
@@ -196,7 +262,13 @@ final class KoshStore {
 
     private func parseItems() -> (cats: [Parser.Item], debts: [Parser.Item], goals: [Parser.Item], invs: [Parser.Item]) {
         // Saved keywords plus the built-in ones, so new words (like Hinglish) work with existing categories too.
-        let cats = data.liveCategories.map { c in Parser.Item(id: c.id, words: (c.keywords ?? []) + (Parser.defaultKeywords[c.id] ?? []) + Parser.nameWords(c.name)) }
+        // A learned word belongs only to the category you taught it, even if another category has it built in.
+        var owner: [String: String] = [:]
+        for c in data.liveCategories { for w in c.learned ?? [] { owner[w.lowercased()] = c.id } }
+        let cats = data.liveCategories.map { c in
+            Parser.Item(id: c.id, words: ((c.learned ?? []) + (c.keywords ?? []) + (Parser.defaultKeywords[c.id] ?? []) + Parser.nameWords(c.name))
+                .filter { owner[$0.lowercased()] == nil || owner[$0.lowercased()] == c.id })
+        }
         let debts = data.liveDebts.map { d in Parser.Item(id: d.id, words: Parser.nameWords(d.name) + (d.keywords ?? [])) }
         let goals = data.liveGoals.map { g in Parser.Item(id: g.id, words: Parser.nameWords(g.name)) }
         let invs = data.liveInvestments.map { i in Parser.Item(id: i.id, words: Parser.nameWords(i.name) + [i.type]) }

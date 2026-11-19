@@ -19,12 +19,6 @@ struct BudgetView: View {
     }
 }
 
-extension AppData {
-    func spent(in mk: String, category: String? = nil) -> Double {
-        liveEntries.filter { $0.type == "expense" && monthKey($0.date) == mk && (category == nil || ($0.categoryId ?? "other") == category) }
-            .reduce(0) { $0 + $1.amount }
-    }
-}
 
 func lastMonths(_ count: Int, endingAt mk: String) -> [String] {
     (0..<count).reversed().map { shiftMonth(mk, -$0) }

@@ -11,6 +11,7 @@ struct Draft: Identifiable, Equatable {
     var investmentId: String?
     var date: String
     var note: String
+    var guessed: String = ""     // category Kosh guessed, to learn from corrections
 }
 
 /// Add or edit an entry. New entries start listening right away when opened from the mic.
@@ -32,6 +33,7 @@ struct EntrySheet: View {
     @State private var debtId = ""
     @State private var goalId = ""
     @State private var investmentId = ""
+    @State private var paidWith = ""            // credit card id, "" = cash/UPI/debit
     @State private var note = ""
     @State private var reduceDebt = true
     @State private var repeatMonthly = false
@@ -126,6 +128,17 @@ struct EntrySheet: View {
                     }
                 }
                 if existing == nil { Toggle("Also lower that balance", isOn: $reduceDebt).tint(K.brand).padding(.horizontal, 4) }
+            } else if !d.liveDebts.filter({ $0.kind == "card" }).isEmpty {
+                field("Paid with") {
+                    Picker("Paid with", selection: $paidWith) {
+                        Text("Cash / UPI / debit card").tag("")
+                        ForEach(d.liveDebts.filter { $0.kind == "card" }) { Text($0.name).tag($0.id) }
+                    }
+                }
+                if !paidWith.isEmpty {
+                    Text("This adds \(amount.isEmpty ? "the amount" : inr(Double(amount) ?? 0)) to \(d.debts.first { $0.id == paidWith }?.name ?? "the card")'s balance.")
+                        .font(.system(size: 12)).foregroundStyle(K.muted).padding(.horizontal, 4)
+                }
             }
         }
         if type == .save {
@@ -254,6 +267,7 @@ struct EntrySheet: View {
             debtId = e.debtId ?? ""
             goalId = e.goalId ?? ""
             investmentId = e.investmentId ?? ""
+            paidWith = e.cardId ?? ""
             note = e.note ?? ""
             return
         }
@@ -267,7 +281,7 @@ struct EntrySheet: View {
         if results.count > 1 {
             drafts = results.map { p in
                 Draft(amount: p.amount.map(fmtAmount) ?? "", type: p.type, categoryId: p.categoryId ?? "other", debtId: p.debtId,
-                      goalId: p.goalId, investmentId: p.investmentId, date: p.date, note: p.note)
+                      goalId: p.goalId, investmentId: p.investmentId, date: p.date, note: p.note, guessed: p.categoryId ?? "other")
             }
             return
         }
@@ -278,6 +292,8 @@ struct EntrySheet: View {
         type = EntryType(rawValue: p.type) ?? .expense
         if let c = p.categoryId { categoryId = c }
         debtId = p.debtId ?? ""
+        // "spent 500 on swiggy with sbi card": a purchase on the card, not a card payment.
+        if p.categoryId != "debt", let dId = p.debtId, store.data.debts.first(where: { $0.id == dId })?.kind == "card" { paidWith = dId } else { paidWith = "" }
         if let g = p.goalId { goalId = g }
         if let i = p.investmentId { investmentId = i }
         note = p.note
@@ -301,8 +317,20 @@ struct EntrySheet: View {
         e.debtId = (type == .expense && categoryId == "debt" && !debtId.isEmpty) ? debtId : nil
         e.goalId = (type == .save && !goalId.isEmpty) ? goalId : nil
         e.investmentId = (type == .invest && !investmentId.isEmpty) ? investmentId : nil
+        e.cardId = (type == .expense && categoryId != "debt" && !paidWith.isEmpty) ? paidWith : nil
         if existing == nil {
-            e.applied = type == .expense ? (e.debtId != nil && reduceDebt) : (e.goalId != nil || e.investmentId != nil)
+            e.applied = type == .expense ? ((e.debtId != nil && reduceDebt) || e.cardId != nil) : (e.goalId != nil || e.investmentId != nil)
+        } else if e.cardId != nil {
+            e.applied = true
+        }
+        // Learn from corrections: if Kosh guessed a different category, remember these words.
+        var learned: [String] = []
+        if type == .expense, categoryId != "debt", categoryId != "other" {
+            if let old = existing, old.categoryId != categoryId {
+                learned = store.learn(from: note.isEmpty ? (old.note ?? "") : note, categoryId: categoryId)
+            } else if existing == nil, !text.isEmpty, store.parse(text).categoryId != categoryId {
+                learned = store.learn(from: note.isEmpty ? text : note, categoryId: categoryId)
+            }
         }
         store.saveEntry(e, previous: existing)
         if existing == nil, repeatMonthly { store.makeRecurring(from: e) }
@@ -310,7 +338,7 @@ struct EntrySheet: View {
         if existing == nil {
             let id = e.id
             let s = store
-            router.show("Saved \(inr(amt)) · \(catName)" + (repeatMonthly ? " · repeats monthly" : "")) { s.deleteEntries([id]) }
+            router.show("Saved \(inr(amt)) · \(catName)" + (repeatMonthly ? " · repeats monthly" : "") + (learned.isEmpty ? "" : " · learned “\(learned.joined(separator: " "))”")) { s.deleteEntries([id]) }
         } else {
             router.show("Updated \(inr(amt))")
         }
@@ -330,6 +358,9 @@ struct EntrySheet: View {
                           investmentId: dr.type == "invest" ? dr.investmentId : nil,
                           createdAt: ISO8601DateFormatter().string(from: Date()), source: text)
             e.applied = e.debtId != nil || e.goalId != nil || e.investmentId != nil
+            if dr.type == "expense", dr.categoryId != dr.guessed, dr.categoryId != "other", dr.categoryId != "debt" {
+                store.learn(from: dr.note, categoryId: dr.categoryId)
+            }
             store.saveEntry(e, previous: nil)
             ids.append(e.id)
             total += amt

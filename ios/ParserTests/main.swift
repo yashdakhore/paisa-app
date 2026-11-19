@@ -77,5 +77,26 @@ eq(pm("two hundred and fifty on vegetables").count, 1, "and inside number")
 eq(pm("500 medicine on 5th november").count, 1, "date not an item")
 eq(pm("bread and butter 80").count, 1, "and without 2 amounts")
 
+// Bank SMS
+func sms(_ s: String) -> BankSMS.Txn? { BankSMS.parse(s, now: now) }
+var b = sms("Rs.250.00 spent on your SBI Credit Card ending 1234 at SWIGGY on 18/11/26. Not you? Call 1800...")
+eq(b?.type, "expense", "sms1 type"); eq(b?.amount, 250, "sms1 amt"); eq(b?.merchant, "Swiggy", "sms1 merchant"); eq(b?.date, "2026-11-18", "sms1 date"); eq(b?.cardHint, "sbi", "sms1 card")
+b = sms("Dear Customer, Rs 120.00 debited from A/c XX1234 on 17-11-26 to VPA rapido@ybl (UPI Ref No 612345678901). Not you? Call 1800")
+eq(b?.amount, 120, "sms2 amt"); eq(b?.merchant, "Rapido", "sms2 merchant"); eq(b?.date, "2026-11-17", "sms2 date"); eq(b?.cardHint, nil, "sms2 no card")
+b = sms("INR 1,840.00 spent on HDFC Bank Credit Card XX1234 at BLINKIT on 2026-11-16:10:22:01. Avl bal: INR 50,000.00")
+eq(b?.amount, 1840, "sms3 amt"); eq(b?.merchant, "Blinkit", "sms3 merchant"); eq(b?.date, "2026-11-16", "sms3 date"); eq(b?.cardHint, "hdfc", "sms3 card")
+b = sms("Your A/c XX1234 is credited with Rs 35,000.00 on 01-11-26 by NEFT from ACME CORP PVT LTD. Avl Bal Rs 40,123")
+eq(b?.type, "income", "sms4 type"); eq(b?.amount, 35000, "sms4 amt"); eq(b?.date, "2026-11-01", "sms4 date")
+eq(sms("123456 is your OTP for txn of Rs 500 at AMAZON. Do not share.") == nil, true, "otp ignored")
+eq(sms("Total Amount Due Rs 42000 for SBI Card is due on 15-12-26") == nil, true, "due ignored")
+eq(sms("Txn of Rs 999 at FLIPKART declined due to insufficient balance") == nil, true, "declined ignored")
+b = sms("Rs 299 paid to JIO via UPI on 18Nov26. UPI Ref 61234")
+eq(b?.amount, 299, "sms5 amt"); eq(b?.merchant, "Jio", "sms5 merchant"); eq(b?.date, "2026-11-18", "sms5 date")
+eq((b?.merchant ?? "").contains(where: \.isNumber), false, "no numbers kept")
+
+// learnable words
+eq(Parser.learnableWords("Rapido ride"), ["rapido"], "learn rapido")
+eq(Parser.learnableWords("Big Bazaar Pvt Ltd"), ["big", "bazaar"], "learn bazaar")
+
 print(failures == 0 ? "PASS: all \(checks) checks" : "\(failures) of \(checks) checks FAILED")
 exit(failures == 0 ? 0 : 1)

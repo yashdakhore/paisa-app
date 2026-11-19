@@ -219,6 +219,12 @@ struct DebtsList: View {
                 .buttonStyle(.plain)
             }
             CardUsageCard(showLink: false)
+            Button { router.sheet = .payoff } label: {
+                Card {
+                    ListRow(symbol: "chart.line.downtrend.xyaxis", title: "Payoff planner", subtitle: "Your debt-free date, and what paying more saves", chevron: true)
+                }
+            }
+            .buttonStyle(.plain)
             ForEach(d.liveDebts) { debt in
                 let usage: Double? = debt.kind == "card" && (debt.limit ?? 0) > 0 ? (debt.balance ?? 0) / (debt.limit ?? 1) : nil
                 Card {

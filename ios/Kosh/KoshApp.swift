@@ -1,11 +1,16 @@
 import Observation
 import SwiftUI
+import UserNotifications
 
 @main
 struct KoshApp: App {
-    @State private var store = KoshStore()
+    @State private var store = KoshStore.shared
     @State private var router = Router()
     @State private var lock = AppLock()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -35,6 +40,8 @@ enum SheetRoute: Identifiable {
     case scores(String?)
     case summary(String)
     case sync
+    case payoff
+    case smsSetup
 
     var id: String {
         switch self {
@@ -50,6 +57,8 @@ enum SheetRoute: Identifiable {
         case .scores(let b): return "scores-\(b ?? "all")"
         case .summary(let mk): return "summary-\(mk)"
         case .sync: return "sync"
+        case .payoff: return "payoff"
+        case .smsSetup: return "sms"
         }
     }
 }
@@ -158,6 +167,8 @@ struct RootView: View {
                 case .scores(let b): ScoreForm(focusBureau: b)
                 case .summary(let mk): MonthlySummary(month: mk)
                 case .sync: SyncSettings()
+                case .payoff: PayoffPlanner()
+                case .smsSetup: SMSSetup()
                 }
             }
             .environment(store)

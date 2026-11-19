@@ -16,6 +16,26 @@ struct AddEntryIntent: AppIntent {
     }
 }
 
+/// For a Shortcuts automation: "When I get a message containing 'debited' → Add bank message to Kosh".
+/// Runs in the background and puts the transaction in Kosh's review list.
+struct AddBankMessageIntent: AppIntent {
+    static var title: LocalizedStringResource = "Add bank message"
+    static var description = IntentDescription("Reads a bank or card SMS (amount, merchant, date) and adds it to Kosh for you to confirm. Card and account numbers are not stored.")
+    static var openAppWhenRun = false
+
+    @Parameter(title: "Message")
+    var message: String
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        if let item = KoshStore.shared.addBankMessage(message) {
+            BudgetAlerts.notifyInbox(item)
+            return .result(dialog: "Kosh: \(inr(item.amount)) \(item.type == "income" ? "from" : "at") \(item.merchant) is ready to review.")
+        }
+        return .result(dialog: "Kosh: no transaction found in that message.")
+    }
+}
+
 struct KoshShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

@@ -27,6 +27,7 @@ struct Category: Syncable, Hashable {
     var order: Double?
     var updatedAt: Double?
     var deleted: Bool?
+    var learned: [String]?      // words Kosh learned from your corrections; they win over built-in words
 }
 
 enum EntryType: String, CaseIterable, Identifiable {
@@ -55,6 +56,21 @@ struct Entry: Syncable, Hashable {
     var createdAt: String?
     var source: String?
     var applied: Bool?
+    var updatedAt: Double?
+    var deleted: Bool?
+    var cardId: String?         // paid with this credit card: the purchase adds to the card's balance
+}
+
+/// A transaction read from a bank/card SMS, waiting for you to confirm.
+struct InboxItem: Syncable, Hashable {
+    var id: String
+    var type: String            // expense | income
+    var amount: Double
+    var merchant: String
+    var date: String
+    var categoryId: String?
+    var cardId: String?
+    var received: String?
     var updatedAt: Double?
     var deleted: Bool?
 }
@@ -139,6 +155,7 @@ struct AppData: Codable {
     var debts: [Debt] = []
     var recurring: [Recurring] = []
     var scores: [CreditScore] = []
+    var inbox: [InboxItem] = []
 
     init() {}
 
@@ -152,6 +169,7 @@ struct AppData: Codable {
         debts = try c.decodeIfPresent([Debt].self, forKey: .debts) ?? []
         recurring = try c.decodeIfPresent([Recurring].self, forKey: .recurring) ?? []
         scores = try c.decodeIfPresent([CreditScore].self, forKey: .scores) ?? []
+        inbox = try c.decodeIfPresent([InboxItem].self, forKey: .inbox) ?? []
     }
 
     static let defaultCategories: [(String, String)] = [
@@ -192,6 +210,7 @@ struct AppData: Codable {
         out.debts = m(a.debts, b.debts)
         out.recurring = m(a.recurring, b.recurring)
         out.scores = m(a.scores, b.scores)
+        out.inbox = m(a.inbox, b.inbox)
         return out
     }
 }

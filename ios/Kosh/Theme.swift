@@ -339,8 +339,3 @@ func shiftMonth(_ mk: String, _ n: Int) -> String {
     return f.string(from: s)
 }
 
-func ordinal(_ n: Int) -> String {
-    let t = n % 100
-    if (11...13).contains(t) { return "\(n)th" }
-    switch n % 10 { case 1: return "\(n)st"; case 2: return "\(n)nd"; case 3: return "\(n)rd"; default: return "\(n)th" }
-}

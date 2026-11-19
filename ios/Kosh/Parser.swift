@@ -245,6 +245,18 @@ enum Parser {
         [name] + name.components(separatedBy: CharacterSet.letters.inverted).filter { $0.count > 3 }
     }
 
+    // MARK: - learning
+
+    /// Words worth remembering from a note or merchant name ("Rapido ride" -> ["rapido", "ride"]).
+    static func learnableWords(_ text: String) -> [String] {
+        let skip: Set<String> = ["ride", "bill", "payment", "paid", "purchase", "order", "store", "shop", "the", "and", "for", "india", "pvt", "ltd", "limited", "private", "services", "upi", "pay"]
+        let words = text.lowercased().components(separatedBy: CharacterSet.letters.inverted)
+            .filter { $0.count >= 3 && !filler.contains($0) && !skip.contains($0) }
+        var out: [String] = []
+        for w in words where !out.contains(w) { out.append(w) }
+        return Array(out.prefix(2))
+    }
+
     // MARK: - several items in one sentence
 
     static func normalize(_ input: String) -> String {
