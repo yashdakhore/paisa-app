@@ -200,8 +200,13 @@ enum Commands {
         }
 
         // Investment: "start SIP 2000 in Nifty index fund", "add PPF 50000", "new FD 1 lakh"
-        let invTypes: [(String, String)] = [("\\bsip\\b", "SIP"), ("\\bmutual funds?\\b|\\bmf\\b|index fund|elss", "Mutual fund"), ("\\bfd\\b|fixed deposit", "FD"),
-                                            ("\\brd\\b|recurring deposit", "RD"), ("\\bppf\\b", "PPF"), ("\\bnps\\b", "NPS"), ("\\bstocks?\\b|\\bshares?\\b", "Stocks"), ("\\bgold\\b|\\bsgb\\b", "Gold")]
+        let invTypes: [(String, String)] = [("\\bsip\\b", "SIP"), ("\\belss\\b|tax saver", "ELSS (tax saver)"), ("index fund", "Index fund"),
+                                            ("\\bmutual funds?\\b|\\bmf\\b", "Mutual fund"), ("\\bfd\\b|fixed deposit", "FD"),
+                                            ("\\brd\\b|recurring deposit", "RD"), ("\\bppf\\b", "PPF"), ("\\bepf\\b|\\bvpf\\b|provident fund", "EPF / VPF"),
+                                            ("\\bnps\\b", "NPS"), ("\\betf\\b", "ETF"), ("\\bstocks?\\b|\\bshares?\\b", "Stocks"),
+                                            ("digital gold", "Digital gold"), ("\\bgold\\b|\\bsgb\\b", "Gold / SGB"), ("\\bbonds?\\b", "Bonds"),
+                                            ("\\blic\\b|insurance plan|endowment", "LIC / insurance plan"), ("sukanya|\\bssy\\b", "Sukanya Samriddhi"),
+                                            ("crypto|bitcoin", "Crypto"), ("chit fund|\\bchit\\b", "Chit fund")]
         if isSetup, !isSpend, let type = invTypes.first(where: { Parser.test($0.0, t) })?.1 {
             var rest = t
             let monthly = num(after: "monthly|per month|every month|a month|sip(?: of)?", in: rest) ?? num(before: "a month|per month|monthly|every month", in: rest)

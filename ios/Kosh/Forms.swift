@@ -219,7 +219,7 @@ struct InvestmentForm: View {
     @State private var hasMaturity = false
     @State private var maturity = Date()
     @State private var note = ""
-    let types = ["SIP", "Mutual fund", "FD", "RD", "PPF", "NPS", "Stocks", "Gold", "Other"]
+    let types = Subcats.investmentTypes
 
     var body: some View {
         FormShell(title: existing == nil ? "New investment" : "Update investment", canDelete: existing != nil,
@@ -239,7 +239,7 @@ struct InvestmentForm: View {
         }
         .onAppear {
             guard let i = existing else { return }
-            name = i.name; type = types.contains(i.type) ? i.type : "Other"
+            name = i.name; type = types.contains(i.type) ? i.type : (i.type == "Gold" ? "Gold / SGB" : "Other")
             monthly = str(i.monthly); invested = str(i.invested); value = str(i.value); note = i.note ?? ""
             if let m = i.maturity, let d = isoDate(m) { hasMaturity = true; maturity = d }
         }

@@ -103,6 +103,7 @@ struct Entry: Syncable, Hashable {
     var updatedAt: Double?
     var deleted: Bool?
     var cardId: String?         // paid with this credit card: the purchase adds to the card's balance
+    var sub: String?            // subcategory you picked (otherwise detected from the note)
     var incomeSource: String?   // money in: salary | family | refund | interest | other (guessed from the note if empty)
     var flow: String?           // move / held / owed: "in" or "out"
     var potId: String?          // held: which pot
@@ -246,7 +247,7 @@ struct AppData: Codable {
     static let defaultCategories: [(String, String)] = [
         ("rent", "Rent"), ("bills", "Electricity & Bills"), ("groceries", "Groceries"), ("food", "Food & Dining"),
         ("transport", "Transport"), ("phone", "Phone & Internet"), ("shopping", "Shopping"), ("health", "Health"),
-        ("entertainment", "Entertainment"), ("debt", "Card/Loan Payments"), ("other", "Other"),
+        ("entertainment", "Entertainment"), ("debt", "EMI & loans"), ("other", "Other"),
     ]
 
     static func empty() -> AppData {

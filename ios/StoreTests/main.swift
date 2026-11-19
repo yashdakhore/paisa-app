@@ -386,6 +386,18 @@ fdS.data = AppData.empty()
 let fdIt = fdS.addBankMessage("INR 5000.00 credited to your A/c XX0000 on \(Parser.iso(Date())) towards FD closure proceeds. IDFC FIRST Bank. Ref 760000000001")!
 eq(fdIt.kind, "move", "FD closure is Moved"); eq(fdS.data.monthSummary(monthKey(Date())).extraIncome, 0, "not income")
 
+// 3s. Subcategories and EMI.
+eq(Subcats.detect("food", "Swiggy"), "delivery", "swiggy → delivery")
+eq(Subcats.detect("transport", "IOCL petrol pump"), "fuel", "iocl → fuel")
+eq(Subcats.detect("health", "Kadu Medicose"), "medicine", "medicose → medicines")
+eq(Subcats.detect("debt", "Bajaj Finance Autopay"), "personal", "bajaj → personal/app loan")
+eq(Subcats.detect("food", "something new"), nil, "unknown → no sub")
+let emiS = KoshStore()
+emiS.data = AppData.empty()
+eq(emiS.data.categories.first { $0.id == "debt" }?.name, "EMI & loans", "category renamed")
+eq(emiS.parse("2499 bajaj finance").categoryId, "debt", "bajaj finance → EMI & loans")
+eq(Subcats.investmentTypes.contains("ELSS (tax saver)"), true, "ELSS available")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

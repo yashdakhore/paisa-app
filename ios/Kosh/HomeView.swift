@@ -151,7 +151,8 @@ struct EntryRow: View {
             case "move": return ("arrow.left.arrow.right", K.muted, "Moved · not counted")
             case "held": return ("person.2", Color(hex: 0xFCD34D), "Held · " + (d.pots.first { $0.id == entry.potId }?.name ?? "someone's money"))
             case "owed": return ("arrow.uturn.left", Color(hex: 0x93C5FD), entry.flow == "in" ? "Paid back" : "Lent")
-            default: return (categorySymbol(entry.categoryId), K.brand2, d.category(entry.categoryId)?.name ?? "Other")
+            default: return (categorySymbol(entry.categoryId), K.brand2, (d.category(entry.categoryId)?.name ?? "Other")
+                             + (Subcats.name(entry.categoryId, d.subcategory(entry)).map { " · \($0)" } ?? ""))
             }
         }()
         let sign = entry.type == "income" ? "+" : (entry.type == "expense" ? "−" : "")

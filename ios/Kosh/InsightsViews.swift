@@ -249,6 +249,30 @@ struct CategoryDetail: View {
                         .chartXAxis { AxisMarks { _ in AxisValueLabel().foregroundStyle(K.muted) } }
                         .frame(height: 140)
                     }
+                    let bySub = Dictionary(grouping: entries, by: { d.subcategory($0) ?? "" }).mapValues { $0.reduce(0) { $0 + $1.amount } }
+                    if !Subcats.subs(c.id).isEmpty, bySub.keys.contains(where: { !$0.isEmpty }) {
+                        Card {
+                            CardHeader(title: "Breakdown")
+                            let rows = bySub.sorted { $0.value > $1.value }
+                            ForEach(Array(rows.enumerated()), id: \.element.key) { i, r in
+                                if i > 0 { RowDivider() }
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Text(Subcats.name(c.id, r.key) ?? "Other").font(.system(size: 15, weight: .medium))
+                                        Spacer()
+                                        Text(inr(r.value)).font(.num(15, .semibold))
+                                    }
+                                    GeometryReader { g in
+                                        Capsule().fill(K.surface2).overlay(alignment: .leading) {
+                                            Capsule().fill(K.brandGradient).frame(width: max(6, g.size.width * CGFloat(r.value / max(spent, 1))))
+                                        }
+                                    }
+                                    .frame(height: 6)
+                                }
+                                .padding(.vertical, 6)
+                            }
+                        }
+                    }
                     Card {
                         CardHeader(title: "Entries · \(monthTitle(mk))")
                         EntryList(entries: entries, showFilters: false, emptyText: "Nothing in \(c.name) this month.")

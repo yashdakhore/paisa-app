@@ -13,7 +13,8 @@ enum Parser {
         "shopping": ["shopping", "clothes", "shoes", "amazon", "flipkart", "myntra", "meesho", "ajio", "shirt", "dress", "gadget", "kapde", "kapda", "joote"],
         "health": ["medicine", "medicines", "doctor", "pharmacy", "chemist", "hospital", "medical", "clinic", "gym", "tablets", "apollo", "pharmeasy", "dawai", "dawa", "davai", "dava"],
         "entertainment": ["movie", "movies", "netflix", "prime", "hotstar", "spotify", "youtube premium", "game", "games", "outing", "party", "concert", "subscription", "picture"],
-        "debt": ["credit card", "card bill", "card payment", "card", "sbi card", "emi", "loan", "mpokket", "repay", "repaid", "repayment"],
+        "debt": ["credit card", "card bill", "card payment", "card", "sbi card", "emi", "loan", "mpokket", "repay", "repaid", "repayment",
+                 "bajaj finance", "kreditbee", "navi", "moneyview", "home credit", "simpl", "lazypay", "zestmoney", "tvs credit", "hdb financial", "fibe"],
         "other": [],
     ]
 

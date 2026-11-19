@@ -36,6 +36,7 @@ struct EntrySheet: View {
     @State private var paidWith = ""            // credit card id, "" = cash/UPI/debit
     @State private var incomeSource = ""        // "" = let Kosh guess from the note
     @State private var potId = ""               // held: which pot
+    @State private var sub = ""                 // subcategory, "" = detected from the note
     @State private var flowIn = false           // moved / held / lent: money in?
     @State private var note = ""
     @State private var reduceDebt = true
@@ -153,6 +154,14 @@ struct EntrySheet: View {
         if type == .expense {
             field("Category", unsure: unsureCategory) {
                 Picker("Category", selection: $categoryId) { ForEach(d.liveCategories) { Text($0.name).tag($0.id) } }
+            }
+            if !Subcats.subs(categoryId).isEmpty {
+                field("Subcategory") {
+                    Picker("Subcategory", selection: $sub) {
+                        Text("Auto" + (Subcats.name(categoryId, Subcats.detect(categoryId, note + " " + text)).map { " (\($0))" } ?? "")).tag("")
+                        ForEach(Subcats.subs(categoryId), id: \.id) { Text($0.name).tag($0.id) }
+                    }
+                }
             }
             if categoryId == "debt" {
                 field("Which card/loan?") {
@@ -352,6 +361,7 @@ struct EntrySheet: View {
             paidWith = e.cardId ?? ""
             incomeSource = e.incomeSource ?? ""
             potId = e.potId ?? ""
+            sub = e.sub ?? ""
             flowIn = e.flow == "in"
             note = e.note ?? ""
             return
@@ -416,6 +426,7 @@ struct EntrySheet: View {
         e.date = Parser.iso(date)
         e.note = note.trimmingCharacters(in: .whitespaces)
         e.categoryId = type == .expense ? categoryId : nil
+        e.sub = type == .expense && !sub.isEmpty && Subcats.subs(categoryId).contains(where: { $0.id == sub }) ? sub : nil
         e.debtId = (type == .expense && categoryId == "debt" && !debtId.isEmpty) ? debtId : nil
         e.goalId = (type == .save && !goalId.isEmpty) ? goalId : nil
         e.investmentId = (type == .invest && !investmentId.isEmpty) ? investmentId : nil

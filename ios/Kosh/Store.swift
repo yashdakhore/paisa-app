@@ -395,6 +395,8 @@ final class KoshStore {
     /// Bank entries filed under Other get another look when Kosh learns new merchant words.
     @discardableResult
     func recategorizeBankEntries() -> Int {
+        // The card/loan category is now "EMI & loans" (same id, so links to loans keep working).
+        if var c = data.categories.first(where: { $0.id == "debt" }), c.name == "Card/Loan Payments" { c.name = "EMI & loans"; upsert(\.categories, c) }
         var n = 0
         for e in data.liveEntries where e.type == "expense" && e.source == "bank sms" && (e.categoryId ?? "other") == "other" && e.debtId == nil {
             let p = parse(e.note ?? "")
