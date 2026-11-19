@@ -142,6 +142,7 @@ final class GmailService: NSObject {
             var added: [InboxItem] = []
             let todo = refs.reversed().filter { manual || !seen.contains($0.id) }
             for (i, ref) in todo.enumerated() {
+                if manual, i > 0 { try? await Task.sleep(nanoseconds: 120_000_000) }   // stay under Gmail's per-second limit
                 let m: GmailMessage.Message = try await get("https://gmail.googleapis.com/gmail/v1/users/me/messages/\(ref.id)?format=full")
                 let when = GmailMessage.date(m) ?? Date()
                 if let since, when < since { seen.insert(ref.id); continue }
@@ -216,19 +217,35 @@ final class GmailService: NSObject {
         return tok.access_token
     }
 
+    /// GET with retries: Gmail answers 403/429 "rate limit" when emails are read quickly, so wait and try again.
     private func get<T: Decodable>(_ url: String) async throws -> T {
-        var r = URLRequest(url: URL(string: url)!)
-        r.setValue("Bearer \(try await validToken())", forHTTPHeaderField: "Authorization")
-        let (data, resp) = try await URLSession.shared.data(for: r)
-        let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200 else {
+        var wait: UInt64 = 1_000_000_000
+        for attempt in 1...5 {
+            var r = URLRequest(url: URL(string: url)!)
+            r.setValue("Bearer \(try await validToken())", forHTTPHeaderField: "Authorization")
+            let (data, resp) = try await URLSession.shared.data(for: r)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if code == 200 { return try JSONDecoder().decode(T.self, from: data) }
             let body = String(data: data, encoding: .utf8) ?? ""
             if code == 403, body.contains("accessNotConfigured") || body.contains("has not been used") {
                 throw GmailError(message: "Turn on the Gmail API in your Google Cloud project, wait a minute, then try again.")
             }
-            throw GmailError(message: "Gmail error \(code).")
+            if code == 403, body.contains("insufficient") {
+                throw GmailError(message: "Gmail read access wasn't allowed. Tap Disconnect, connect again, and tick the Gmail box on Google's screen.")
+            }
+            if code == 401 { accessToken = nil }
+            let limited = code == 429 || code >= 500 || code == 401 || (code == 403 && (body.contains("ateLimit") || body.contains("quota") || body.contains("Rate")))
+            if limited, attempt < 5 {
+                status = "Gmail asked Kosh to slow down, waiting…"
+                try await Task.sleep(nanoseconds: wait)
+                wait *= 2
+                continue
+            }
+            struct GErr: Decodable { struct E: Decodable { var message: String? }; var error: E? }
+            let reason = (try? JSONDecoder().decode(GErr.self, from: data))?.error?.message ?? ""
+            throw GmailError(message: "Gmail error \(code)" + (reason.isEmpty ? "." : ": \(reason.prefix(140))"))
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        throw GmailError(message: "Gmail is busy. Try again in a minute.")
     }
 
     static func randomString(_ n: Int) -> String {
