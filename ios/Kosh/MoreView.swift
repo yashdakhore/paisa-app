@@ -104,7 +104,7 @@ struct MoreView: View {
 
             Card {
                 CardHeader(title: "Voice")
-                Text("Tap the orange mic and say things like “spent 250 on groceries”, “paid 9000 rent”, “120 auto yesterday”, “paid 5000 to SBI card”, “saved 2000 for emergency fund” or “got salary 30000”.\n\nWith Siri: say “Hey Siri, add an expense in Kosh”, then what you spent.")
+                Text("**Spending:** “spent 250 on groceries”, “120 auto yesterday”, “paid 5000 to SBI card”, “saved 2000 for emergency fund”, “got salary 30000”.\n\n**Set up:** “add SBI credit card limit 50000 due on 5th”, “SBI card balance is 8000”, “add bike loan 80000 EMI 3500”, “new goal bike 80000 by June”, “start SIP 2000 in Nifty”, “set food budget 6000”, “my salary is 30000”, “CIBIL score 760”.\n\n**Ask:** “how much can I spend today?”, “how much did I spend on food?”, “can I afford a 15000 phone?”, “how much do I owe?”, “when will I be debt-free?”, “how are my goals?”, “how should I plan my money?”\n\nWith Siri: “Hey Siri, add an expense in Kosh”.")
                     .font(.system(size: 14)).foregroundStyle(K.muted)
                 Text(speechOnDevice ? "Speech is recognised on this iPhone." : "This iPhone uses Apple’s speech service for Indian English.")
                     .font(.system(size: 13)).foregroundStyle(K.faint).padding(.top, 10)

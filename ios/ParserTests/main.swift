@@ -102,6 +102,44 @@ b = sms("Rs.150 paid to RAPIDO via super.money RuPay credit card on 18-11-26")
 eq(b?.cardHint, "supermoney", "supermoney hint")
 
 // learnable words
+// Voice commands (set-up and questions).
+func vc(_ s: String) -> VoiceCommand? { Commands.parse(s, now: now) }
+eq(vc("add SBI credit card limit 50000 balance 12000 due on 5th 42 percent"), .card(name: "SBI Card", limit: 50000, balance: 12000, dueDay: 5, rate: 42), "card full")
+eq(vc("add onecard with limit 1 lakh"), .card(name: "OneCard", limit: 100000, balance: nil, dueDay: nil, rate: nil), "onecard lakh")
+eq(vc("new IDFC credit card 30k limit due date 20"), .card(name: "IDFC Card", limit: 30000, balance: nil, dueDay: 20, rate: nil), "limit before")
+eq(vc("SBI card balance is 8,500"), .debtUpdate(query: "sbi", balance: 8500, limit: nil, dueDay: nil), "card balance update")
+eq(vc("add bike loan 80000 emi 3500 due on 10th interest 12 percent"), .loan(name: "Bike loan", kind: "loan", balance: 80000, emi: 3500, dueDay: 10, rate: 12), "loan full")
+eq(vc("I took a phone emi of 2000 per month"), .loan(name: "Phone EMI", kind: "emi", balance: nil, emi: 2000, dueDay: nil, rate: nil), "emi only")
+eq(vc("home loan outstanding 4 lakh"), .debtUpdate(query: "home loan", balance: 400000, limit: nil, dueDay: nil), "loan balance update")
+eq(vc("new goal emergency fund 1 lakh by december 2027"), .goal(name: "Emergency Fund", target: 100000, deadline: "2027-12"), "goal by month year")
+eq(vc("saving up for a bike 80000 in 10 months"), .goal(name: "Bike", target: 80000, deadline: "2027-09"), "goal in months")
+eq(vc("goal goa trip 25k by march"), .goal(name: "Goa Trip", target: 25000, deadline: "2027-03"), "goal month rolls to next year")
+eq(vc("start SIP 2000 in nifty index fund"), .investment(name: "Nifty Index", type: "SIP", monthly: 2000, amount: nil), "sip")
+eq(vc("add PPF 50000"), .investment(name: "PPF", type: "PPF", monthly: nil, amount: 50000), "ppf")
+eq(vc("open FD of 1 lakh in SBI"), .investment(name: "FD SBI", type: "FD", monthly: nil, amount: 100000), "fd")
+eq(vc("set food budget 6000"), .budget(query: "food", amount: 6000), "budget")
+eq(vc("budget for shopping 3k"), .budget(query: "shopping", amount: 3000), "budget for")
+eq(vc("my salary is 30000"), .salary(30000), "salary")
+eq(vc("got salary 30000"), nil, "salary received is income, not a setting")
+eq(vc("cibil score 760"), .score(bureau: "CIBIL", score: 760), "score cibil")
+eq(vc("my experian score is seven hundred eighty"), .score(bureau: "Experian", score: 780), "score words")
+eq(vc("how much can I spend today?"), .question(.canSpend), "q spend")
+eq(vc("how much did I spend on food last month"), .question(.spent(query: "food", lastMonth: true)), "q spent food")
+eq(vc("how much have I spent this month"), .question(.spent(query: nil, lastMonth: false)), "q spent total")
+eq(vc("how much do I owe"), .question(.owe), "q owe")
+eq(vc("when will I be debt free"), .question(.debtFree), "q debt free")
+eq(vc("how is my bike goal doing"), .question(.goal(query: "bike")), "q goal")
+eq(vc("what's my credit score"), .question(.score), "q score")
+eq(vc("can I afford a 15000 phone"), .question(.afford(15000)), "q afford")
+eq(vc("how should I plan my money"), .question(.plan), "q plan")
+// Everyday entries are left to the expense parser.
+eq(vc("spent 250 on groceries"), nil, "expense not a command")
+eq(vc("paid 5000 to SBI card"), nil, "card payment not a command")
+eq(vc("paid 3500 emi for bike loan"), nil, "emi payment not a command")
+eq(vc("saved 2000 for emergency fund"), nil, "saving not a command")
+eq(vc("invested 2000 in nifty"), nil, "investing not a command")
+eq(vc("spent 500 on swiggy with sbi card"), nil, "card purchase not a command")
+
 // Gmail API messages → text.
 func b64url(_ s: String) -> String { Data(s.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
 let gjson = """

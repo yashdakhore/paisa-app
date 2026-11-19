@@ -200,3 +200,26 @@ func simulatePayoff(_ debts: [(balance: Double, apr: Double)], monthly: Double, 
     }
     return PayoffResult(months: nil, interest: interest, points: points)
 }
+
+func shortDate(_ iso: String) -> String {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM-dd"
+    guard let d = f.date(from: iso) else { return iso }
+    f.dateFormat = "d MMM"
+    return f.string(from: d)
+}
+
+func monthTitle(_ mk: String) -> String {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM"
+    guard let d = f.date(from: mk) else { return mk }
+    f.dateFormat = "MMM yyyy"
+    return f.string(from: d)
+}
+
+func shiftMonth(_ mk: String, _ n: Int) -> String {
+    let f = DateFormatter()
+    f.dateFormat = "yyyy-MM"
+    guard let d = f.date(from: mk), let s = Parser.cal.date(byAdding: .month, value: n, to: d) else { return mk }
+    return f.string(from: s)
+}

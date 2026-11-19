@@ -40,7 +40,8 @@ struct EntrySheet: View {
     @State private var unsureAmount = false
     @State private var unsureCategory = false
     @State private var drafts: [Draft] = []
-    @State private var hint = "Tap the mic and speak, or type. You can say several things: “250 groceries and 120 auto”."
+    @State private var command: VoiceCommand?
+    @State private var hint = "Speak or type an expense (“250 groceries and 120 auto”), a set-up (“add SBI card limit 50000”), or a question (“how much can I spend today?”)."
     @State private var confirmDelete = false
     @State private var pulse = false
     @FocusState private var focused: Bool
@@ -68,7 +69,9 @@ struct EntrySheet: View {
                             .font(.system(size: 13)).foregroundStyle(speech.errorMessage == nil ? K.muted : K.warn)
                     }
 
-                    if drafts.count > 1 {
+                    if let c = command {
+                        commandCard(c)
+                    } else if drafts.count > 1 {
                         multiItems(d)
                     } else {
                         singleItem(d)
@@ -93,7 +96,7 @@ struct EntrySheet: View {
             }
         }
         .onAppear(perform: setup)
-        .onDisappear { speech.cancel() }
+        .onDisappear { speech.cancel(); Speaker.shared.stop() }
         .onChange(of: speech.transcript) { _, t in
             guard speech.isListening, !t.isEmpty else { return }
             text = t
@@ -179,6 +182,49 @@ struct EntrySheet: View {
         }
     }
 
+    // MARK: - set-up commands and questions
+
+    @ViewBuilder
+    private func commandCard(_ c: VoiceCommand) -> some View {
+        let p = store.preview(c)
+        let isQuestion: Bool = { if case .question = c { return true } else { return false } }()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: isQuestion ? "bubble.left.and.text.bubble.right" : "wand.and.stars")
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(K.brand)
+                Text(p.title).font(.system(size: 18, weight: .semibold))
+            }
+            ForEach(p.lines, id: \.self) { line in
+                Text(line).font(.system(size: isQuestion ? 17 : 16)).foregroundStyle(isQuestion ? K.text : K.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let problem = p.problem {
+                Label(problem, systemImage: "exclamationmark.triangle").font(.system(size: 14)).foregroundStyle(K.warn)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(K.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+        HStack(spacing: 10) {
+            if isQuestion {
+                Button {
+                    if case .question(let q) = c { Speaker.shared.say(store.answer(q)) }
+                } label: { Label("Read aloud", systemImage: "speaker.wave.2") }.buttonStyle(SecondaryButton())
+                Button("Done") { Speaker.shared.stop(); dismiss() }.buttonStyle(PrimaryButton())
+            } else {
+                Button("Cancel") { speech.cancel(); dismiss() }.buttonStyle(SecondaryButton())
+                Button("Save") {
+                    let msg = store.perform(c)
+                    router.show(msg)
+                    dismiss()
+                }
+                .buttonStyle(PrimaryButton()).disabled(!p.canSave).opacity(p.canSave ? 1 : 0.5)
+            }
+        }
+        .padding(.top, 6)
+    }
+
     // MARK: - several items
 
     @ViewBuilder
@@ -256,6 +302,11 @@ struct EntrySheet: View {
         speech.onFinish = { t in
             text = t
             applyParse(t)
+            if let c = command {
+                if case .question(let q) = c { Speaker.shared.say(store.answer(q)); hint = "Ask another question with the mic, or tap Done." }
+                else { hint = "Check what Kosh understood, then tap Save." }
+                return
+            }
             if drafts.count > 1 { hint = "Check each item, then tap Save all." }
             else { hint = unsureAmount ? "Couldn't hear an amount. Type it in below." : "Check the details, then tap Save. Orange boxes are guesses." }
         }
@@ -276,7 +327,9 @@ struct EntrySheet: View {
     }
 
     private func applyParse(_ t: String) {
-        guard existing == nil, !t.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard existing == nil, !t.trimmingCharacters(in: .whitespaces).isEmpty else { command = nil; return }
+        command = Commands.parse(t)
+        if command != nil { drafts = []; return }
         let results = store.parseMany(t)
         if results.count > 1 {
             drafts = results.map { p in

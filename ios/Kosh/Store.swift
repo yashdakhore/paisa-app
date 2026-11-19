@@ -299,7 +299,7 @@ final class KoshStore {
 
     // MARK: - parsing context
 
-    private func parseItems() -> (cats: [Parser.Item], debts: [Parser.Item], goals: [Parser.Item], invs: [Parser.Item]) {
+    func parseItems() -> (cats: [Parser.Item], debts: [Parser.Item], goals: [Parser.Item], invs: [Parser.Item]) {
         // Saved keywords plus the built-in ones, so new words (like Hinglish) work with existing categories too.
         // A learned word belongs only to the category you taught it, even if another category has it built in.
         var owner: [String: String] = [:]

@@ -74,6 +74,40 @@ eq(smsOne?.maybeDuplicate, nil, "first alert not flagged")
 let mailOne = store.addBankMessage("INR 777.00 spent on your IDFC FIRST BANK Credit Card ending XX0000 at D MART RETAIL on \(d). Available Limit: INR 1,000", now: now.addingTimeInterval(6400))
 eq(mailOne?.maybeDuplicate, true, "email of the same spend flagged")
 
+// 3d. Voice commands change the right things.
+let vs = KoshStore()
+vs.data = AppData.empty()
+vs.data.debts = [Debt(id: "s", name: "SBI Card", kind: "card", balance: 1000, limit: 20000)]
+func run(_ s: String) -> String? { Commands.parse(s).map { vs.perform($0) } }
+_ = run("SBI card balance is 8500")
+eq(vs.data.debts.first { $0.id == "s" }?.balance, 8500, "voice: card balance updated")
+_ = run("add IDFC credit card limit 30000 due on 20th")
+let idfc = vs.data.liveDebts.first { $0.name == "IDFC Card" }
+eq(idfc?.limit, 30000, "voice: new card limit"); eq(idfc?.dueDay, 20, "voice: new card due"); eq(idfc?.kind, "card", "voice: new card kind")
+_ = run("add sbi credit card limit 25000")
+eq(vs.data.liveDebts.filter { $0.kind == "card" }.count, 2, "voice: same card updated, not duplicated")
+eq(vs.data.debts.first { $0.id == "s" }?.limit, 25000, "voice: existing card limit changed")
+_ = run("add bike loan 80000 emi 3500")
+eq(vs.data.liveDebts.first { $0.name == "Bike loan" }?.emi, 3500, "voice: loan emi")
+_ = run("new goal emergency fund 50000 by december 2027")
+eq(vs.data.liveGoals.first?.target, 50000, "voice: goal target"); eq(vs.data.liveGoals.first?.deadline, "2027-12", "voice: goal deadline")
+_ = run("start SIP 2000 in nifty index fund")
+eq(vs.data.liveInvestments.first?.monthly, 2000, "voice: sip monthly")
+_ = run("set food budget 6000")
+eq(vs.data.categories.first { $0.id == "food" }?.budget, 6000, "voice: food budget")
+_ = run("my salary is 30000")
+eq(vs.data.settings.salary, 30000, "voice: salary")
+_ = run("cibil score 760")
+eq(vs.data.scores.first?.score, 760, "voice: score")
+eq(vs.preview(Commands.parse("hdfc card balance 500")!).canSave, false, "voice: unknown card can't be saved")
+// Answers use your numbers.
+let ans = vs.answer(.owe)
+eq(ans.hasPrefix("You owe ₹88,500"), true, "voice: owe total = 8500 + 80000")
+eq(vs.answer(.canSpend).contains("left this month"), true, "voice: can spend answer")
+eq(vs.answer(.afford(1_000_000)).hasPrefix("Not this month"), true, "voice: can't afford 10 lakh")
+eq(vs.answer(.spent(query: "food", lastMonth: false)).contains("of your ₹6,000 budget"), true, "voice: spent vs budget")
+eq(vs.answer(.score), "Your latest scores: CIBIL 760.", "voice: score answer")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)
