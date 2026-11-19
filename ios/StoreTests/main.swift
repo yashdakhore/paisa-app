@@ -260,7 +260,7 @@ func upiOut(_ amt: Int, _ to: String, _ rrn: String) -> InboxItem? { ks.addBankM
 let shop = ks.addBankMessage("Rs 250 spent on your card at SWIGGY on \(kd) UPI Ref No 700000000001")!
 eq(shop.autoAdded != nil, true, "known shop auto-added"); eq(ks.liveInbox.isEmpty, true, "nothing waiting")
 // Unknown person → waits and asks "Who is …?"
-let r1 = upiOut(28, "ROHIT VIJAY VARMA", "700000000002")!
+let r1 = upiOut(280, "ROHIT VIJAY VARMA", "700000000002")!
 eq(r1.askWho, true, "unknown person asks who"); eq(r1.autoAdded, nil, "unsure waits")
 // Answer: friend → suggestion becomes lent; confirm; next payment from him settles it.
 ks.setRole("ROHIT VIJAY VARMA", role: "friend")
@@ -268,8 +268,8 @@ let r1b = ks.liveInbox.first { $0.id == r1.id }!
 eq(r1b.kind, "owed", "friend → lent"); eq(r1b.askWho, nil, "no longer asks")
 _ = ks.confirmInbox(r1b)
 let rp = ks.person(for: "Rohit Vijay Varma")!
-eq(ks.owedBalance(rp.id), 28, "Rohit owes 28")
-let back = upiIn(28, "ROHIT VIJAY VARMA", "700000000003")!
+eq(ks.owedBalance(rp.id), 280, "Rohit owes 280")
+let back = upiIn(280, "ROHIT VIJAY VARMA", "700000000003")!
 eq(back.kind, "owed", "repayment recognised"); eq(back.autoAdded != nil, true, "sure: added")
 eq(ks.owedBalance(rp.id), 0, "settled")
 eq(ks.data.monthSummary(monthKey(Date())).spent, 250, "lending isn't spending")
@@ -301,6 +301,21 @@ eq(ks.data.liveEntries.first { $0.id == mdk2.autoAdded }?.categoryId, "groceries
 // "Me" = your other account → Moved.
 ks.setRole("ASHA K", role: "me")
 eq(ks.looksLikePerson("Mdk Enterprises"), false, "business isn't a person"); eq(ks.looksLikePerson("Rohit Vijay Varma"), true, "name is a person")
+
+// 3m. Less to review: small payments to new people are added; one answer sorts all of a person's payments.
+let ls = KoshStore()
+ls.data = AppData.empty()
+let ld = Parser.iso(Date())
+let tiny = ls.addBankMessage("Rs 30 debited via UPI on \(ld) to PRIYA NAIR SHARMA. RRN 710000000001")!
+eq(tiny.autoAdded != nil, true, "₹30 to someone new: added, not asked")
+_ = ls.addBankMessage("Rs 500 debited via UPI on \(ld) to KUNAL MEHTA. RRN 710000000002")
+_ = ls.addBankMessage("Rs 700 debited via UPI on \(ld) to KUNAL MEHTA. RRN 710000000003")
+eq(ls.liveInbox.filter { $0.askWho == true }.count, 2, "two payments to Kunal wait")
+ls.setRole("KUNAL MEHTA", role: "shop")
+eq(ls.liveInbox.count, 2, "shop with unknown category still needs a category")
+ls.setRole("KUNAL MEHTA", role: "family")
+eq(ls.liveInbox.count, 0, "answering family adds all of his payments")
+eq(ls.data.liveEntries.filter { $0.categoryId == "family" }.count, 2, "as Family & gifts")
 
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.

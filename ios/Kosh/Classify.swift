@@ -56,9 +56,11 @@ extension KoshStore {
         p.role = role
         if Self.payeeKey(p.name) != Self.payeeKey(payee), !(p.aliases ?? []).contains(payee) { p.aliases = (p.aliases ?? []) + [payee] }
         upsert(\.people, p)
+        // Everything waiting from this person is re-sorted, and added straight away where Kosh is now sure.
         for var item in data.inbox where item.isLive && person(for: item.merchant)?.id == p.id {
-            classify(&item, text: item.merchant)
+            let sure = classify(&item, text: item.merchant)
             upsert(\.inbox, item)
+            if sure, item.maybeDuplicate != true, data.settings.autoAdd != false { confirmInbox(item) }
         }
         save()
         return p
@@ -125,6 +127,9 @@ extension KoshStore {
         upsert(\.categories, Category(id: "family", name: "Family & gifts", icon: nil, budget: 0,
                                        keywords: ["family", "gift", "gifts", "mom", "dad", "papa", "mummy", "ghar"], order: 10.5))
     }
+
+    /// Payments below this to or from someone new are added without asking.
+    var smallLimit: Double { data.settings.smallLimit ?? 200 }
 
     // MARK: the classifier
 
@@ -198,7 +203,10 @@ extension KoshStore {
             if src == "salary" { return set("income", "Your salary", sure: true) }
             if src == "refund" { return set("income", "Refund or cashback from a company", sure: true) }
             if src == "interest" { return set("income", "Bank interest", sure: true) }
-            if looksLikePerson(item.merchant) { item.askWho = true; return set("income", "Money from \(item.merchant). Who is this?", sure: false) }
+            if looksLikePerson(item.merchant) {
+                if item.amount < smallLimit { return set("income", "Small amount from \(item.merchant): counted as Other", sure: true) }
+                item.askWho = true; return set("income", "Money from \(item.merchant). Who is this?", sure: false)
+            }
             if src == "family" { return set("income", "Shares your surname: counted as Family", sure: item.amount < 10_000) }
             return set("income", "Money in from \(item.merchant)", sure: false)
         }
@@ -207,7 +215,11 @@ extension KoshStore {
         if (item.categoryId ?? "other") != "other" {
             return set("expense", "\(item.merchant) is \(data.category(item.categoryId)?.name ?? "spending")", sure: true)
         }
-        if looksLikePerson(item.merchant) { item.askWho = true; return set("expense", "Sent to \(item.merchant). Who is this?", sure: false) }
+        if looksLikePerson(item.merchant) {
+            // Not worth a question: small payments to someone new are just spending (change it once if not, and Kosh remembers).
+            if item.amount < smallLimit { return set("expense", "Small payment to \(item.merchant): counted as Other", sure: true) }
+            item.askWho = true; return set("expense", "Sent to \(item.merchant). Who is this?", sure: false)
+        }
         return set("expense", "New shop or service: pick a category", sure: false)
     }
 }
