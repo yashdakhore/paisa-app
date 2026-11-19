@@ -380,6 +380,12 @@ gf.repairIncomeSources()
 eq(gf.data.entries.first { $0.id == "bs" }?.incomeSource, "salary", "repair re-sorts the salary credit")
 eq(gf.data.monthSummary(monthKey(Date())).income, 35000, "salary once + 5000 other")
 
+// 3r. FD money back is Moved, not income.
+let fdS = KoshStore()
+fdS.data = AppData.empty()
+let fdIt = fdS.addBankMessage("INR 5000.00 credited to your A/c XX0000 on \(Parser.iso(Date())) towards FD closure proceeds. IDFC FIRST Bank. Ref 760000000001")!
+eq(fdIt.kind, "move", "FD closure is Moved"); eq(fdS.data.monthSummary(monthKey(Date())).extraIncome, 0, "not income")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

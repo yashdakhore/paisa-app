@@ -219,6 +219,12 @@ extension KoshStore {
             return set("move", flowIn ? "Cash deposited: your own money, not income" : "ATM cash: counted when you spend it", sure: true)
         }
 
+        // Money from or to your own FD / RD (opening, maturity, closure) is your money changing place.
+        let alert = " " + BankSMS.normalize(text).lowercased().prefix(300) + " "
+        if Parser.test("\\b(fd|fixed deposit|term deposit|recurring deposit|rd a/c|td a/c)\\b|\\b(maturity|premature|deposit closure|closure proceeds)\\b", alert) {
+            return set("move", flowIn ? "Money back from your FD: your own money, not income" : "Put into an FD: still your money", sure: true)
+        }
+
         if let r = rule(for: item.merchant) {
             if r.kind == "expense", let c = r.categoryId { item.categoryId = c }
             if r.kind == "income" { item.incomeSource = r.incomeSource ?? item.incomeSource }
