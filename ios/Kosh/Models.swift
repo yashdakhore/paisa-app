@@ -19,6 +19,7 @@ struct AppSettings: Codable, Equatable {
     var myName: String?         // money you send to yourself (another of your accounts) isn't spending
     var fixedCosts: [FixedCost]? // what you pay every month no matter what (from Suggest my budget)
     var familyNames: [String]?  // senders you marked as family ("Aastha", "Sanskar Dakhore")
+    var autoAdd: Bool?          // add transactions Kosh is sure about without asking (default on)
 }
 
 struct Category: Syncable, Hashable {
@@ -34,16 +35,53 @@ struct Category: Syncable, Hashable {
 }
 
 enum EntryType: String, CaseIterable, Identifiable {
-    case expense, income, save, invest
+    case expense, income, save, invest, move, held, owed
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .expense: return "Expense"
-        case .income: return "Income"
-        case .save: return "Saving to a goal"
-        case .invest: return "Investment"
+        case .expense: return "Spent"
+        case .income: return "Earned"
+        case .save: return "Saved to a goal"
+        case .invest: return "Invested"
+        case .move: return "Moved (not counted)"
+        case .held: return "Held for someone"
+        case .owed: return "Lent / borrowed"
         }
     }
+}
+
+/// Someone you send money to or get money from. Remembered once, then used for every transfer.
+struct Person: Syncable, Hashable {
+    var id: String
+    var name: String
+    var role: String            // family | friend | shop | landlord | me | other
+    var aliases: [String]?      // other spellings banks use ("SANSKAR P DAKHORE")
+    var updatedAt: Double?
+    var deleted: Bool?
+
+    static let roles: [(id: String, name: String)] = [("family", "Family"), ("friend", "Friend"), ("shop", "Shop / vendor"),
+                                                      ("landlord", "Landlord"), ("me", "Me (my other account)"), ("other", "Someone else")]
+}
+
+/// Someone else's money passing through you ("Dad's money"). What's left = in − out; it's never your income or spending.
+struct Pot: Syncable, Hashable {
+    var id: String
+    var name: String
+    var personId: String?
+    var closed: Bool?
+    var updatedAt: Double?
+    var deleted: Bool?
+}
+
+/// What you taught Kosh about a payee: always treat "Rohit Vijay Varma" as lent money, "Mdk Enterprises" as Groceries…
+struct PayeeRule: Syncable, Hashable {
+    var id: String              // the payee, normalised (lowercase, single spaces)
+    var kind: String            // expense | income | move | held | owed | save
+    var categoryId: String?
+    var incomeSource: String?
+    var potId: String?
+    var updatedAt: Double?
+    var deleted: Bool?
 }
 
 struct Entry: Syncable, Hashable {
@@ -63,6 +101,9 @@ struct Entry: Syncable, Hashable {
     var deleted: Bool?
     var cardId: String?         // paid with this credit card: the purchase adds to the card's balance
     var incomeSource: String?   // money in: salary | family | refund | interest | other (guessed from the note if empty)
+    var flow: String?           // move / held / owed: "in" or "out"
+    var potId: String?          // held: which pot
+    var personId: String?       // owed / held / family: who
     var txnKey: String?         // scrambled bank reference / fingerprint, so one transaction is never added twice
     var gmailId: String?        // the alert email it came from
 }
@@ -81,6 +122,13 @@ struct InboxItem: Syncable, Hashable {
     var txnKey: String?
     var gmailId: String?
     var incomeSource: String?
+    var kind: String?           // Kosh's suggestion: expense | income | move | held | owed
+    var personId: String?
+    var potId: String?
+    var reason: String?         // why Kosh suggested this, shown under the row
+    var askWho: Bool?           // a person Kosh hasn't met: ask "Who is …?"
+    var isCash: Bool?           // cash deposit / ATM
+    var autoAdded: String?      // entry id, when Kosh was sure and added it straight away (not stored in the inbox)
     var backfill: Bool?         // from a month fetch: already part of the card balances you entered
     var updatedAt: Double?
     var deleted: Bool?
@@ -167,6 +215,9 @@ struct AppData: Codable {
     var recurring: [Recurring] = []
     var scores: [CreditScore] = []
     var inbox: [InboxItem] = []
+    var people: [Person] = []
+    var pots: [Pot] = []
+    var rules: [PayeeRule] = []
 
     init() {}
 
@@ -181,6 +232,9 @@ struct AppData: Codable {
         recurring = try c.decodeIfPresent([Recurring].self, forKey: .recurring) ?? []
         scores = try c.decodeIfPresent([CreditScore].self, forKey: .scores) ?? []
         inbox = try c.decodeIfPresent([InboxItem].self, forKey: .inbox) ?? []
+        people = try c.decodeIfPresent([Person].self, forKey: .people) ?? []
+        pots = try c.decodeIfPresent([Pot].self, forKey: .pots) ?? []
+        rules = try c.decodeIfPresent([PayeeRule].self, forKey: .rules) ?? []
     }
 
     static let defaultCategories: [(String, String)] = [
@@ -222,6 +276,9 @@ struct AppData: Codable {
         out.recurring = m(a.recurring, b.recurring)
         out.scores = m(a.scores, b.scores)
         out.inbox = m(a.inbox, b.inbox)
+        out.people = m(a.people, b.people)
+        out.pots = m(a.pots, b.pots)
+        out.rules = m(a.rules, b.rules)
         return out
     }
 }

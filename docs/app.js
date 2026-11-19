@@ -17,7 +17,7 @@ const view = $('#view');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pct = (x) => Math.round(Math.max(0, Math.min(1, x)) * 100);
 const catById = (id) => state.categories.find((c) => c.id === id);
-const TYPES = { expense: 'Expense', income: 'Income', save: 'Saving to a goal', invest: 'Investment' };
+const TYPES = { expense: 'Spent', income: 'Earned', save: 'Saved to a goal', invest: 'Invested', move: 'Moved (not counted)', held: 'Held for someone', owed: 'Lent / borrowed' };
 
 async function init() {
   if (!state) {

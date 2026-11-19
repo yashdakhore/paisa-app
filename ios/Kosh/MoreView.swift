@@ -61,6 +61,10 @@ struct MoreView: View {
                 .tint(K.brand)
                 .id(budgetAlertsOn)
                 RowDivider()
+                Button { router.sheet = .people } label: {
+                    ListRow(symbol: "person.2", title: "People & rules", subtitle: "Who's family, friends, shops · what Kosh remembers", chevron: true)
+                }.buttonStyle(.plain)
+                RowDivider()
                 Button { router.sheet = .gmail } label: {
                     ListRow(symbol: "envelope.badge", title: "Connect Gmail",
                             subtitle: GmailService.shared.isConnected ? "On · \(GmailService.shared.email)" : "Bank alert emails land in Kosh automatically", chevron: true)

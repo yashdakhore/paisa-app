@@ -75,13 +75,13 @@ final class KoshStore {
 
     // MARK: - generic edits
 
-    private func upsert<T: Syncable>(_ kp: WritableKeyPath<AppData, [T]>, _ item: T) {
+    func upsert<T: Syncable>(_ kp: WritableKeyPath<AppData, [T]>, _ item: T) {
         var it = item
         it.updatedAt = nowMillis()
         if let i = data[keyPath: kp].firstIndex(where: { $0.id == it.id }) { data[keyPath: kp][i] = it } else { data[keyPath: kp].append(it) }
     }
 
-    private func tombstone<T: Syncable>(_ kp: WritableKeyPath<AppData, [T]>, _ id: String) {
+    func tombstone<T: Syncable>(_ kp: WritableKeyPath<AppData, [T]>, _ id: String) {
         if let i = data[keyPath: kp].firstIndex(where: { $0.id == id }) {
             data[keyPath: kp][i].deleted = true
             data[keyPath: kp][i].updatedAt = nowMillis()
@@ -293,8 +293,14 @@ final class KoshStore {
         item.txnKey = key
         item.gmailId = gmailId
         if manual { item.backfill = true }
+        if t.isCash { item.isCash = true }
         if t.type == "income" { item.incomeSource = AppData.guessIncomeSource(text + " " + merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? []) }
+        let sure = classify(&item, text: text)
         upsert(\.inbox, item)
+        // Sure ones are added straight away; the rest wait on Home with Kosh's suggestion and reason.
+        if sure, item.maybeDuplicate != true, data.settings.autoAdd != false, let e = confirmInbox(item) {
+            item.autoAdded = e.id
+        }
         save()
         return item
     }
@@ -308,31 +314,51 @@ final class KoshStore {
         return nil
     }
 
-    /// Turns a reviewed bank transaction into an entry. Returns nil if it was already added (e.g. "Add all" tapped twice).
+    /// Turns a reviewed bank transaction into an entry, as the kind you chose (or Kosh's suggestion).
+    /// Returns nil if it was already added (e.g. "Add all" tapped twice). Any correction is remembered for that payee.
     @discardableResult
-    func confirmInbox(_ item: InboxItem, categoryId: String?, incomeSource: String? = nil) -> Entry? {
+    func confirmInbox(_ item: InboxItem, categoryId: String? = nil, incomeSource: String? = nil, kind: String? = nil, potId: String? = nil) -> Entry? {
         guard data.inbox.contains(where: { $0.id == item.id && $0.isLive }) else { return nil }
         if data.liveEntries.contains(where: { e in (item.txnKey != nil && e.txnKey == item.txnKey) || (item.gmailId != nil && e.gmailId == item.gmailId) }) {
             tombstone(\.inbox, item.id); save(); return nil
         }
         let isPayment = item.type == "payment"
-        var e = Entry(id: newId(), type: isPayment ? "expense" : item.type, amount: item.amount, date: item.date, note: item.merchant,
-                      categoryId: isPayment ? "debt" : (item.type == "expense" ? (categoryId ?? item.categoryId ?? "other") : nil),
+        let flow = item.type == "income" ? "in" : "out"
+        let k = isPayment ? "expense" : (kind ?? item.kind ?? (item.type == "income" ? "income" : "expense"))
+        var e = Entry(id: newId(), type: k, amount: item.amount, date: item.date, note: item.merchant,
                       createdAt: ISO8601DateFormatter().string(from: Date()), source: "bank sms")
-        if isPayment {
-            e.debtId = item.cardId          // paying the card bill lowers what you owe on it
-        } else {
-            e.cardId = item.type == "expense" ? item.cardId : nil
-            if let c = categoryId, c != item.categoryId { learn(from: item.merchant, categoryId: c) }
+        switch k {
+        case "expense":
+            if isPayment {
+                e.categoryId = "debt"
+                e.debtId = item.cardId          // paying the card bill lowers what you owe on it
+            } else {
+                e.categoryId = categoryId ?? item.categoryId ?? "other"
+                e.cardId = flow == "out" ? item.cardId : nil
+                if let c = categoryId, c != item.categoryId { learn(from: item.merchant, categoryId: c) }
+            }
+        case "income":
+            e.incomeSource = incomeSource ?? item.incomeSource
+            if incomeSource == "family", item.incomeSource != "family" { markFamily(item.merchant) }
+        case "held":
+            e.flow = flow
+            e.potId = potId ?? item.potId
+            e.personId = item.personId
+        case "owed":
+            e.flow = flow
+            e.personId = item.personId ?? person(for: item.merchant)?.id ?? setRole(item.merchant, role: "friend").id
+        default:
+            e.type = "move"
+            e.flow = flow
         }
         // Month fetches bring in past spends that your card balance already includes, so they don't change it again.
         e.applied = (e.cardId != nil || e.debtId != nil) && item.backfill != true
         e.txnKey = item.txnKey
         e.gmailId = item.gmailId
-        if item.type == "income" {
-            e.incomeSource = incomeSource ?? item.incomeSource
-            // "This sender is family": remember the name so their next transfer is sorted automatically.
-            if incomeSource == "family", item.incomeSource != "family" { markFamily(item.merchant) }
+        // You changed Kosh's suggestion: remember it for this payee (pots are one-off, so only the kind is kept for them).
+        let changed = (kind != nil && kind != item.kind) || (categoryId != nil && categoryId != item.categoryId) || (incomeSource != nil && incomeSource != item.incomeSource)
+        if changed, !isPayment, item.isCash != true {
+            saveRule(item.merchant, kind: e.type, categoryId: e.type == "expense" ? e.categoryId : nil, incomeSource: e.type == "income" ? e.incomeSource : nil)
         }
         tombstone(\.inbox, item.id)
         saveEntry(e, previous: nil)

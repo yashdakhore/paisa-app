@@ -35,6 +35,8 @@ struct EntrySheet: View {
     @State private var investmentId = ""
     @State private var paidWith = ""            // credit card id, "" = cash/UPI/debit
     @State private var incomeSource = ""        // "" = let Kosh guess from the note
+    @State private var potId = ""               // held: which pot
+    @State private var flowIn = false           // moved / held / lent: money in?
     @State private var note = ""
     @State private var reduceDebt = true
     @State private var repeatMonthly = false
@@ -119,6 +121,26 @@ struct EntrySheet: View {
         }
         field("Type") {
             Picker("Type", selection: $type) { ForEach(EntryType.allCases) { Text($0.label).tag($0) } }
+        }
+        if [.move, .held, .owed].contains(type) {
+            field("Direction") {
+                Picker("Direction", selection: $flowIn) {
+                    Text(type == .owed ? "I lent / paid for them" : "Money out").tag(false)
+                    Text(type == .owed ? "They paid me back" : "Money in").tag(true)
+                }
+            }
+        }
+        if type == .held {
+            field("Pot") {
+                Picker("Pot", selection: $potId) {
+                    Text("Choose…").tag("")
+                    ForEach(store.openPots) { p in Text("\(p.name) · \(inr(store.potLeft(p.id))) left").tag(p.id) }
+                }
+            }
+            Button("New pot from this") {
+                let p = store.createPot(note.isEmpty ? "Held money" : note.capitalized + "'s money")
+                potId = p.id
+            }.font(.system(size: 14, weight: .medium))
         }
         if type == .income {
             field("From") {
@@ -329,6 +351,8 @@ struct EntrySheet: View {
             investmentId = e.investmentId ?? ""
             paidWith = e.cardId ?? ""
             incomeSource = e.incomeSource ?? ""
+            potId = e.potId ?? ""
+            flowIn = e.flow == "in"
             note = e.note ?? ""
             return
         }
@@ -350,6 +374,21 @@ struct EntrySheet: View {
         }
         drafts = []
         let p = results[0]
+        // "sent 5000 to Sanskar from dad's money": a held-money pot named in what you said.
+        let low = t.lowercased().replacingOccurrences(of: "’", with: "'")
+        if let pot = store.openPots.first(where: { pot in
+            let w = pot.name.lowercased().replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "'s", with: "").split(separator: " ").filter { $0 != "money" }
+            return !w.isEmpty && w.allSatisfy { low.contains($0) } && (low.contains("money") || low.contains("paisa") || low.contains("pot"))
+        }) {
+            type = .held
+            potId = pot.id
+            flowIn = Parser.test("\\b(received|got|gave me|sent me|deposited|mila|mile|bheje)\\b", low)
+            if let a = p.amount { amount = fmtAmount(a) }
+            date = isoDate(p.date) ?? date
+            note = p.note
+            unsureAmount = !p.sureAmount; unsureCategory = false
+            return
+        }
         if let a = p.amount { amount = fmtAmount(a) }
         date = isoDate(p.date) ?? date
         type = EntryType(rawValue: p.type) ?? .expense
@@ -381,6 +420,14 @@ struct EntrySheet: View {
         e.goalId = (type == .save && !goalId.isEmpty) ? goalId : nil
         e.investmentId = (type == .invest && !investmentId.isEmpty) ? investmentId : nil
         e.cardId = (type == .expense && categoryId != "debt" && !paidWith.isEmpty) ? paidWith : nil
+        if [.move, .held, .owed].contains(type) {
+            e.flow = flowIn ? "in" : "out"
+            e.potId = type == .held && !potId.isEmpty ? potId : nil
+            e.categoryId = nil
+            if type == .owed, !note.trimmingCharacters(in: .whitespaces).isEmpty {
+                e.personId = (store.person(for: note) ?? store.setRole(note, role: "friend")).id
+            }
+        }
         e.incomeSource = type == .income ? (incomeSource.isEmpty ? AppData.guessIncomeSource(note + " " + text, myName: store.data.settings.myName, familyNames: store.data.settings.familyNames ?? []) : incomeSource) : nil
         if existing == nil {
             e.applied = type == .expense ? ((e.debtId != nil && reduceDebt) || e.cardId != nil) : (e.goalId != nil || e.investmentId != nil)

@@ -15,6 +15,7 @@ enum BankSMS {
         var cardHint: String?   // bank name word for credit card purchases/payments, e.g. "sbi"
         var ref: String? = nil  // bank's unique reference (UPI Ref / RRN / Txn ID); the SMS and the email share it
         var time: String? = nil // "HH:mm" if the alert gives one
+        var isCash = false      // cash deposit / ATM withdrawal: your money changing form
     }
 
     static let banks = ["sbi", "hdfc", "icici", "axis", "kotak", "idfc", "yes", "au", "rbl", "indusind", "amex", "bob", "pnb", "canara", "onecard", "one card", "supermoney", "super money", "federal", "citi", "standard chartered"]
@@ -48,8 +49,8 @@ enum BankSMS {
                       "total amount due", "minimum amount due", "min amt due", "will be debited", "request", "offer", "cashback of", "emi conversion",
                       "up to rs", "upto rs", "save rs", "get rs", "win rs"]
         if ignore.contains(where: { core.contains($0) }) { return nil }
-        // Cash in or out of your own account (deposit machine, ATM) is your money changing form, not income or spending.
-        if core.range(of: "deposit of cash|cash deposit|cash dep\\b|\\bcdm\\b|\\bby cash\\b|\\batm\\b|cash withdrawal|atm wdl|\\bwdl\\b", options: .regularExpression) != nil { return nil }
+        // Cash in or out of your own account (deposit machine, ATM): your money changing form. Kosh files it as Moved.
+        let isCash = core.range(of: "deposit of cash|cash deposit|cash dep\\b|\\bcdm\\b|\\bby cash\\b|\\batm\\b|cash withdrawal|atm wdl|\\bwdl\\b", options: .regularExpression) != nil
 
         // Credit card bill payment (lowers the card's balance).
         let isCardPayment = core.range(of: "(payment|amount paid).{0,140}credit card|credit card.{0,80}payment", options: .regularExpression) != nil
@@ -73,13 +74,15 @@ enum BankSMS {
         }
 
         let merchant: String
-        if type == "payment" {
+        if isCash {
+            merchant = type == "income" ? "Cash deposit" : "ATM withdrawal"
+        } else if type == "payment" {
             merchant = (cardHint.map { $0.uppercased() + " " } ?? "") + "card bill payment"
         } else {
             merchant = merchantName(text, credit: type == "income") ?? (type == "income" ? "Money received" : "Card/UPI payment")
         }
         return Txn(type: type, amount: amount, merchant: merchant, date: smsDate(t, now: now), cardHint: cardHint,
-                   ref: reference(text), time: time(text))
+                   ref: reference(text), time: time(text), isCash: isCash)
     }
 
     /// "UPI Ref No 612345678901", "RRN: 600012345678", "Txn ID AXI123456789", "Transaction Ref: ABC123456"

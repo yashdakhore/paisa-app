@@ -64,6 +64,7 @@ struct HomeView: View {
             }
 
             InboxCard()
+            HeldMoneyCard()
 
             SummaryCard()
 
@@ -144,6 +145,9 @@ struct EntryRow: View {
             case "income": return ("arrow.down.left", K.good, "Income")
             case "save": return ("wallet.pass", Color(hex: 0xC4B5FD), "Saving · " + (d.goals.first { $0.id == entry.goalId }?.name ?? "goal"))
             case "invest": return ("chart.line.uptrend.xyaxis", Color(hex: 0x67E8F9), "Investment · " + (d.investments.first { $0.id == entry.investmentId }?.name ?? ""))
+            case "move": return ("arrow.left.arrow.right", K.muted, "Moved · not counted")
+            case "held": return ("person.2", Color(hex: 0xFCD34D), "Held · " + (d.pots.first { $0.id == entry.potId }?.name ?? "someone's money"))
+            case "owed": return ("arrow.uturn.left", Color(hex: 0x93C5FD), entry.flow == "in" ? "Paid back" : "Lent")
             default: return (categorySymbol(entry.categoryId), K.brand2, d.category(entry.categoryId)?.name ?? "Other")
             }
         }()

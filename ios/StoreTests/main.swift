@@ -8,6 +8,7 @@ func eq<T: Equatable>(_ a: T, _ b: T, _ label: String, line: Int = #line) {
 BudgetAlerts.enabled = false
 let store = KoshStore()
 store.data = AppData.empty()
+store.data.settings.autoAdd = false   // review-flow tests
 store.data.debts = [Debt(id: "sbi", name: "SBI Card", kind: "card", balance: 30000, limit: 50000, keywords: ["sbi"]),
                     Debt(id: "mp", name: "mPokket loan", kind: "loan", balance: 5000, keywords: ["mpokket"])]
 
@@ -77,6 +78,7 @@ eq(mailOne?.maybeDuplicate, true, "email of the same spend flagged")
 // 3d. Voice commands change the right things.
 let vs = KoshStore()
 vs.data = AppData.empty()
+vs.data.settings.autoAdd = false   // review-flow tests
 vs.data.debts = [Debt(id: "s", name: "SBI Card", kind: "card", balance: 1000, limit: 20000)]
 func run(_ s: String) -> String? { Commands.parse(s).map { vs.perform($0) } }
 _ = run("SBI card balance is 8500")
@@ -111,6 +113,7 @@ eq(vs.answer(.score), "Your latest scores: CIBIL 760.", "voice: score answer")
 // 3e. Card bill payments don't count as spending; stuck "Other" bank entries get re-sorted.
 let cs = KoshStore()
 cs.data = AppData.empty()
+cs.data.settings.autoAdd = false   // review-flow tests
 cs.data.debts = [Debt(id: "c", name: "IDFC Card", kind: "card", balance: 5000), Debt(id: "l", name: "Bike loan", kind: "loan", balance: 50000)]
 let today = Parser.iso(Date())
 cs.saveEntry(Entry(id: "p1", type: "expense", amount: 400, date: today, note: "Eternal", categoryId: "other", source: "bank sms"), previous: nil)
@@ -123,6 +126,7 @@ eq(cs.data.entries.first { $0.id == "p1" }?.categoryId, "food", "eternal is food
 // 3f. Delete all transactions: entries and inbox go, balances go back, everything else stays.
 let ds = KoshStore()
 ds.data = AppData.empty()
+ds.data.settings.autoAdd = false   // review-flow tests
 ds.data.debts = [Debt(id: "c", name: "SBI Card", kind: "card", balance: 1000)]
 ds.data.goals = [Goal(id: "g", name: "Bike", kind: "save", target: 50000, saved: 0)]
 ds.data.settings.salary = 30000
@@ -157,6 +161,7 @@ eq(BudgetSuggest.suggest(income: 10000, fixed: fx, emis: 3000, cardDebt: 0).note
 // 3h. Unique references: the SMS and email of one payment count once; re-fetches don't duplicate.
 let us = KoshStore()
 us.data = AppData.empty()
+us.data.settings.autoAdd = false   // review-flow tests
 let dd = Parser.iso(Date())
 let upiSMS = "Rs 450.00 debited from A/c XX0000 on \(dd) to VPA chaipoint@ybl (UPI Ref No 612345678901)."
 let upiMail = "Hi, ₹450 debited from your account via UPI. | Transaction date | \(dd) | To | Chai Point | RRN | 612345678901 |"
@@ -185,6 +190,7 @@ eq(us.addBankMessage(upiMail, gmailId: "g1", manual: true) != nil, true, "after 
 // 3i. Double "Add all", cash deposits, and month fetches vs card balances.
 let ws = KoshStore()
 ws.data = AppData.empty()
+ws.data.settings.autoAdd = false   // review-flow tests
 ws.data.debts = [Debt(id: "i", name: "IDFC Card", kind: "card", balance: 2000, limit: 5000)]
 let wd = Parser.iso(Date())
 let one = ws.addBankMessage("INR 835.00 spent on your IDFC FIRST BANK Credit Card ending XX0000 at RENTMOJO on \(wd) at 10:00 AM.")!
@@ -192,8 +198,11 @@ eq(ws.confirmInbox(one, categoryId: nil) != nil, true, "first confirm adds")
 eq(ws.confirmInbox(one, categoryId: nil) == nil, true, "second confirm of same item does nothing")
 eq(ws.data.liveEntries.count, 1, "only one entry")
 eq(ws.data.debts[0].balance, 2835, "new spend raises card balance")
-eq(ws.addBankMessage("Your A/C XXXXX000000 Credited INR 47000.00 on \(wd) -Deposit of Cash at S5NM000000000 CDM. Avl Bal INR 47279.17-SBI"), nil, "cash deposit skipped")
-eq(ws.addBankMessage("Rs 2000 withdrawn at ATM from A/c XX0000 on \(wd)"), nil, "atm withdrawal skipped")
+let cashIn = ws.addBankMessage("Your A/C XXXXX000000 Credited INR 47000.00 on \(wd) -Deposit of Cash at S5NM000000000 CDM. Avl Bal INR 47279.17-SBI")
+eq(cashIn?.kind, "move", "cash deposit is Moved"); eq(cashIn?.reason?.contains("holding for someone"), true, "big deposit asks yours or held")
+eq(ws.addBankMessage("Rs 2000 withdrawn at ATM from A/c XX0000 on \(wd)")?.kind, "move", "atm withdrawal is Moved")
+ws.discardInbox(ws.liveInbox.first { $0.isCash == true && $0.amount == 47000 }!)
+ws.discardInbox(ws.liveInbox.first { $0.isCash == true && $0.amount == 2000 }!)
 let old = ws.addBankMessage("INR 400.00 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on \(wd) at 9:00 AM.", gmailId: "m9", manual: true)!
 eq(old.backfill, true, "month fetch item marked")
 _ = ws.confirmInbox(old, categoryId: nil)
@@ -203,6 +212,7 @@ eq(ws.data.monthSummary(monthKey(Date())).spent, 1235, "but it still counts as s
 // 3j. Income sources: salary counts once, family money adds on top, plan uses salary only.
 let fs = KoshStore()
 fs.data = AppData.empty()
+fs.data.settings.autoAdd = false   // review-flow tests
 fs.data.settings.salary = 25000
 fs.data.settings.myName = "Asha Kumar"
 let fd = Parser.iso(Date())
@@ -230,6 +240,7 @@ eq(AppData.guessIncomeSource("mom sent", myName: nil, familyNames: []), "family"
 // 3k. A credit near your salary is the salary even when the bank calls it "Money received".
 let ss = KoshStore()
 ss.data = AppData.empty()
+ss.data.settings.autoAdd = false   // review-flow tests
 ss.data.settings.salary = 25600
 ss.saveEntry(Entry(id: "s1", type: "income", amount: 25600, date: Parser.iso(Date()), note: "Money received", source: "bank sms"), previous: nil)
 ss.saveEntry(Entry(id: "s2", type: "income", amount: 3, date: Parser.iso(Date()), note: "One97 Communications", source: "bank sms"), previous: nil)
@@ -237,6 +248,59 @@ ss.saveEntry(Entry(id: "s3", type: "income", amount: 500, date: Parser.iso(Date(
 let sm = ss.data.monthSummary(monthKey(Date()))
 eq(sm.salaryIncome, 25600, "salary-sized credit is salary"); eq(sm.income, 26103, "not counted twice")
 eq(sm.bySource["refund"], 3, "paytm credit is cashback"); eq(sm.bySource["other"], 500, "small unknown credit is other")
+
+// 3l. Kinds, people, pots, rules, auto-add (made-up names).
+let ks = KoshStore()
+ks.data = AppData.empty()
+ks.data.settings.myName = "Asha Kumar"
+let kd = Parser.iso(Date())
+func upiIn(_ amt: Int, _ from: String, _ rrn: String) -> InboxItem? { ks.addBankMessage("You have received ₹\(amt) via UPI. Transaction date \(kd) From \(from) RRN \(rrn)") }
+func upiOut(_ amt: Int, _ to: String, _ rrn: String) -> InboxItem? { ks.addBankMessage("₹\(amt) debited from your account via UPI. Transaction date \(kd) To \(to) RRN \(rrn)") }
+// Sure: known shop → added automatically.
+let shop = ks.addBankMessage("Rs 250 spent on your card at SWIGGY on \(kd) UPI Ref No 700000000001")!
+eq(shop.autoAdded != nil, true, "known shop auto-added"); eq(ks.liveInbox.isEmpty, true, "nothing waiting")
+// Unknown person → waits and asks "Who is …?"
+let r1 = upiOut(28, "ROHIT VIJAY VARMA", "700000000002")!
+eq(r1.askWho, true, "unknown person asks who"); eq(r1.autoAdded, nil, "unsure waits")
+// Answer: friend → suggestion becomes lent; confirm; next payment from him settles it.
+ks.setRole("ROHIT VIJAY VARMA", role: "friend")
+let r1b = ks.liveInbox.first { $0.id == r1.id }!
+eq(r1b.kind, "owed", "friend → lent"); eq(r1b.askWho, nil, "no longer asks")
+_ = ks.confirmInbox(r1b)
+let rp = ks.person(for: "Rohit Vijay Varma")!
+eq(ks.owedBalance(rp.id), 28, "Rohit owes 28")
+let back = upiIn(28, "ROHIT VIJAY VARMA", "700000000003")!
+eq(back.kind, "owed", "repayment recognised"); eq(back.autoAdded != nil, true, "sure: added")
+eq(ks.owedBalance(rp.id), 0, "settled")
+eq(ks.data.monthSummary(monthKey(Date())).spent, 250, "lending isn't spending")
+// Held money: Dad's cash deposit goes into a pot; transfers out come from it; none counts as yours.
+ks.setRole("RAMESH KUMAR", role: "family")
+let pot = ks.createPot("Dad's money", personId: ks.person(for: "Ramesh Kumar")!.id)
+let dep = ks.addBankMessage("Your A/C XXXXX000000 Credited INR 90000.00 on \(kd) -Deposit of Cash at S5NM000000000 CDM. Avl Bal INR 90279.17-SBI")!
+_ = ks.confirmInbox(dep, kind: "held", potId: pot.id)
+eq(ks.potLeft(pot.id), 90000, "pot holds 90k")
+let toDad = upiOut(60000, "RAMESH KUMAR", "700000000004")!
+eq(toDad.kind, "held", "to family while a pot is open → suggested from the pot"); eq(toDad.potId, pot.id, "right pot")
+_ = ks.confirmInbox(toDad)
+ks.setRole("SUNIL KUMAR", role: "family")
+_ = ks.confirmInbox(upiOut(5000, "SUNIL KUMAR", "700000000005")!)
+eq(ks.potLeft(pot.id), 25000, "90k − 60k − 5k = 25k left")
+var kms = ks.data.monthSummary(monthKey(Date()))
+eq(kms.income, 0, "held money isn't income"); eq(kms.spent, 250, "held money isn't spending")
+ks.keepRest(pot.id)
+kms = ks.data.monthSummary(monthKey(Date()))
+eq(ks.potLeft(pot.id), 0, "keep the rest empties the pot"); eq(kms.bySource["family"], 25000, "kept part becomes Family income")
+eq(ks.openPots.isEmpty, true, "pot closed")
+// Rules: correcting once is remembered.
+let mdk = ks.addBankMessage("Rs 899 debited via UPI on \(kd) to MDK ENTERPRISES. RRN 700000000006")!
+eq(mdk.autoAdded, nil, "unknown business waits")
+_ = ks.confirmInbox(mdk, categoryId: "groceries")
+let mdk2 = ks.addBankMessage("Rs 450 debited via UPI on \(kd) to MDK ENTERPRISES. RRN 700000000007")!
+eq(mdk2.autoAdded != nil, true, "rule makes next one automatic")
+eq(ks.data.liveEntries.first { $0.id == mdk2.autoAdded }?.categoryId, "groceries", "with the learned category")
+// "Me" = your other account → Moved.
+ks.setRole("ASHA K", role: "me")
+eq(ks.looksLikePerson("Mdk Enterprises"), false, "business isn't a person"); eq(ks.looksLikePerson("Rohit Vijay Varma"), true, "name is a person")
 
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.

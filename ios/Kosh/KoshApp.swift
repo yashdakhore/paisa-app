@@ -45,6 +45,8 @@ enum SheetRoute: Identifiable {
     case smsSetup
     case gmail
     case budgetWizard
+    case pot(String)
+    case people
 
     var id: String {
         switch self {
@@ -64,6 +66,8 @@ enum SheetRoute: Identifiable {
         case .smsSetup: return "sms"
         case .gmail: return "gmail"
         case .budgetWizard: return "budget-wizard"
+        case .pot(let id): return "pot-\(id)"
+        case .people: return "people"
         }
     }
 }
@@ -176,6 +180,8 @@ struct RootView: View {
                 case .smsSetup: SMSSetup()
                 case .gmail: GmailSetup()
                 case .budgetWizard: BudgetWizard()
+                case .pot(let id): PotDetail(potId: id)
+                case .people: PeopleRules()
                 }
             }
             .environment(store)

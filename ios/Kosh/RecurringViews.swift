@@ -116,7 +116,7 @@ struct RecurringForm: View {
                   onSave: save, onDelete: { if let r = existing { store.deleteRecurring(r.id) } }) {
             Section {
                 TextField("Name (e.g. Rent, Jio recharge)", text: $note)
-                Picker("Type", selection: $type) { ForEach(EntryType.allCases) { Text($0.label).tag($0.rawValue) } }
+                Picker("Type", selection: $type) { ForEach(EntryType.allCases.prefix(4)) { Text($0.label).tag($0.rawValue) } }
                 LabeledContent("Amount (₹)") { TextField("0", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
                 if type == "expense" {
                     Picker("Category", selection: $categoryId) { ForEach(d.liveCategories) { Text($0.name).tag($0.id) } }

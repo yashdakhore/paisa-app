@@ -8,86 +8,248 @@ struct InboxCard: View {
     @Environment(Router.self) private var router
     @State private var chosen: [String: String] = [:]   // inbox id -> category
     @State private var sources: [String: String] = [:]  // inbox id -> income source
+    @State private var kinds: [String: String] = [:]    // inbox id -> kind
+    @State private var pots: [String: String] = [:]     // inbox id -> pot
+    @State private var newPotFor: InboxItem?
+    @State private var newPotName = ""
 
     var body: some View {
         let items = store.liveInbox
         if !items.isEmpty {
             Card {
-                CardHeader(title: "From your bank · \(items.count) to review")
+                CardHeader(title: "Needs a look · \(items.count)")
+                Text("Kosh adds what it's sure about by itself. These need you once; your answer is remembered.")
+                    .font(.system(size: 12)).foregroundStyle(K.faint).padding(.bottom, 6)
                 ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                     if i > 0 { RowDivider() }
                     row(item)
                 }
-                if items.count > 1 {
+                let ready = items.filter { $0.askWho != true && !(kind($0) == "held" && pot($0) == nil) }
+                if ready.count > 1 {
                     Button {
-                        let ids = items.compactMap { store.confirmInbox($0, categoryId: chosen[$0.id], incomeSource: sources[$0.id])?.id }
+                        let ids = ready.compactMap { add($0)?.id }
                         let s = store
-                        router.show("Added \(ids.count) from your bank") { s.deleteEntries(ids) }
-                    } label: { Label("Add all \(items.count)", systemImage: "checkmark") }
+                        router.show("Added \(ids.count)") { s.deleteEntries(ids) }
+                    } label: { Label("Add all \(ready.count) as shown", systemImage: "checkmark") }
                         .buttonStyle(PrimaryButton()).padding(.top, 12)
                 }
             }
+            .alert("New held-money pot", isPresented: Binding(get: { newPotFor != nil }, set: { if !$0 { newPotFor = nil } })) {
+                TextField("e.g. Dad's money", text: $newPotName)
+                Button("Create") {
+                    if let item = newPotFor {
+                        let p = store.createPot(newPotName.isEmpty ? "Held money" : newPotName, personId: item.personId)
+                        pots[item.id] = p.id; kinds[item.id] = "held"
+                    }
+                    newPotFor = nil; newPotName = ""
+                }
+                Button("Cancel", role: .cancel) { newPotFor = nil }
+            } message: { Text("Money you're keeping for someone. It won't count as your income or spending.") }
         }
+    }
+
+    private func kind(_ item: InboxItem) -> String { kinds[item.id] ?? item.kind ?? (item.type == "income" ? "income" : "expense") }
+    private func pot(_ item: InboxItem) -> String? { pots[item.id] ?? item.potId }
+
+    private func add(_ item: InboxItem) -> Entry? {
+        store.confirmInbox(item, categoryId: chosen[item.id], incomeSource: sources[item.id], kind: kinds[item.id], potId: pot(item))
+    }
+
+    private func chip(_ text: String) -> some View {
+        Label(text, systemImage: "chevron.up.chevron.down")
+            .font(.system(size: 13, weight: .medium)).lineLimit(1).padding(.horizontal, 12).frame(minHeight: 36)
+            .background(K.surface2, in: Capsule())
     }
 
     func row(_ item: InboxItem) -> some View {
         let d = store.data
+        let k = kind(item)
         let cat = chosen[item.id] ?? item.categoryId ?? "other"
+        let src = sources[item.id] ?? item.incomeSource ?? "other"
         let card = item.cardId.flatMap { id in d.debts.first { $0.id == id }?.name }
+        let flowIn = item.type == "income"
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Tile(symbol: item.type == "income" ? "arrow.down.left" : item.type == "payment" ? "creditcard" : categorySymbol(cat),
-                     tint: item.type == "income" ? K.good : K.brand2)
+                Tile(symbol: flowIn ? "arrow.down.left" : (k == "expense" ? categorySymbol(cat) : "arrow.up.right"), tint: flowIn ? K.good : K.brand2)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.merchant).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                    Text("\(shortDate(item.date))" + (item.type == "payment" ? (card == nil ? " · add this card under Debts to lower its balance" : " · lowers what you owe") : (card.map { " · \($0)" } ?? "")))
-                        .font(.system(size: 13)).foregroundStyle(K.muted).lineLimit(2)
-                    if item.maybeDuplicate == true {
-                        Label("Maybe already added (SMS and email both came)", systemImage: "exclamationmark.triangle")
-                            .font(.system(size: 12, weight: .medium)).foregroundStyle(K.warn)
-                    }
+                    Text("\(shortDate(item.date))" + (card.map { " · \($0)" } ?? "")).font(.system(size: 13)).foregroundStyle(K.muted)
                 }
                 Spacer()
-                Text((item.type == "income" ? "+" : "−") + inr(item.amount)).font(.num(16, .semibold)).foregroundStyle(item.type == "income" ? K.good : K.text)
+                Text((flowIn ? "+" : "−") + inr(item.amount)).font(.num(16, .semibold)).foregroundStyle(flowIn ? K.good : K.text)
+            }
+            if let reason = item.reason {
+                Label(reason, systemImage: "sparkles").font(.system(size: 12)).foregroundStyle(K.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            if item.maybeDuplicate == true {
+                Label("Maybe already added (SMS and email both came)", systemImage: "exclamationmark.triangle")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(K.warn)
+            }
+            if item.askWho == true {
+                Text("Who is \(item.merchant)?").font(.system(size: 14, weight: .semibold))
+                FlowLayout(spacing: 8) {
+                    ForEach(Person.roles, id: \.id) { r in
+                        Button { store.setRole(item.merchant, role: r.id) } label: {
+                            Text(r.name).font(.system(size: 13, weight: .medium)).padding(.horizontal, 12).frame(minHeight: 34)
+                                .background(K.surface2, in: Capsule()).overlay(Capsule().strokeBorder(K.lineStrong))
+                        }.buttonStyle(.plain)
+                    }
+                }
+            } else if item.type != "payment" {
+                FlowLayout(spacing: 8) {
+                    Menu {
+                        ForEach(KoshStore.kinds, id: \.id) { kk in Button(kk.name) { kinds[item.id] = kk.id } }
+                    } label: { chip(KoshStore.kindName(k)) }
+                    switch k {
+                    case "expense":
+                        Menu { ForEach(d.liveCategories) { c in Button(c.name) { chosen[item.id] = c.id } } } label: { chip(d.category(cat)?.name ?? "Other") }
+                    case "income":
+                        Menu { ForEach(AppData.incomeSources, id: \.id) { s in Button(s.name) { sources[item.id] = s.id } } } label: { chip(AppData.incomeSourceName(src)) }
+                    case "held":
+                        Menu {
+                            ForEach(store.openPots) { p in Button("\(p.name) · \(inr(store.potLeft(p.id))) left") { pots[item.id] = p.id } }
+                            Button("New pot…") { newPotName = item.personId.flatMap { id in d.people.first { $0.id == id }?.name.split(separator: " ").first.map { "\($0)'s money" } } ?? ""; newPotFor = item }
+                        } label: { chip(pot(item).flatMap { id in d.pots.first { $0.id == id }?.name } ?? "Choose pot") }
+                    default:
+                        EmptyView()
+                    }
+                }
             }
             HStack(spacing: 8) {
-                if item.type == "income" {
-                    let src = sources[item.id] ?? item.incomeSource ?? "other"
-                    Menu {
-                        ForEach(AppData.incomeSources, id: \.id) { s in Button(s.name) { sources[item.id] = s.id } }
-                    } label: {
-                        Label(AppData.incomeSourceName(src), systemImage: "chevron.up.chevron.down")
-                            .font(.system(size: 13, weight: .medium)).padding(.horizontal, 12).frame(minHeight: 36)
-                            .background(K.surface2, in: Capsule())
-                    }
-                }
-                if item.type == "expense" {
-                    Menu {
-                        ForEach(d.liveCategories) { c in Button(c.name) { chosen[item.id] = c.id } }
-                    } label: {
-                        Label(d.category(cat)?.name ?? "Other", systemImage: "chevron.up.chevron.down")
-                            .font(.system(size: 13, weight: .medium)).padding(.horizontal, 12).frame(minHeight: 36)
-                            .background(K.surface2, in: Capsule())
-                    }
-                }
                 Spacer()
                 Button { store.discardInbox(item) } label: {
                     Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(K.muted)
                         .frame(width: 44, height: 36).background(K.surface2, in: Capsule())
                 }
                 .accessibilityLabel("Discard \(item.merchant)")
+                let blocked = item.askWho == true || (k == "held" && pot(item) == nil)
                 Button {
-                    guard let e = store.confirmInbox(item, categoryId: item.type == "expense" ? cat : nil, incomeSource: sources[item.id]) else { return }
+                    guard let e = add(item) else { return }
                     let s = store
-                    router.show("Added \(inr(item.amount)) · \(item.merchant)") { s.deleteEntries([e.id]) }
+                    router.show("Added \(inr(item.amount)) · \(KoshStore.kindName(e.type == "move" ? "move" : e.type))") { s.deleteEntries([e.id]) }
                 } label: {
                     Text("Add").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
                         .padding(.horizontal, 18).frame(minHeight: 36).background(K.brandGradient, in: Capsule())
                 }
+                .disabled(blocked).opacity(blocked ? 0.4 : 1)
                 .accessibilityLabel("Add \(item.merchant)")
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+// MARK: - Held money (Home) and pot details
+
+struct HeldMoneyCard: View {
+    @Environment(KoshStore.self) private var store
+    @Environment(Router.self) private var router
+    var body: some View {
+        let pots = store.openPots
+        if !pots.isEmpty {
+            Card {
+                CardHeader(title: "Held for others")
+                ForEach(Array(pots.enumerated()), id: \.element.id) { i, p in
+                    if i > 0 { RowDivider() }
+                    Button { router.sheet = .pot(p.id) } label: {
+                        ListRow(symbol: "person.2", tint: Color(hex: 0xFCD34D), title: p.name,
+                                subtitle: "\(inr(store.potIn(p.id))) in · \(inr(store.potOut(p.id))) out", amount: inr(store.potLeft(p.id)), chevron: true)
+                    }.buttonStyle(.plain)
+                }
+                Text("Not counted as your income or spending.").font(.system(size: 12)).foregroundStyle(K.faint).padding(.top, 4)
+            }
+        }
+    }
+}
+
+struct PotDetail: View {
+    @Environment(KoshStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let potId: String
+    @State private var confirmKeep = false
+    var body: some View {
+        let d = store.data
+        let pot = d.pots.first { $0.id == potId }
+        let es = d.liveEntries.filter { $0.type == "held" && $0.potId == potId }.sorted { $0.date > $1.date }
+        NavigationStack {
+            List {
+                Section {
+                    LabeledContent("Received", value: inr(store.potIn(potId)))
+                    LabeledContent("Sent on", value: inr(store.potOut(potId)))
+                    LabeledContent("Still with you", value: inr(store.potLeft(potId))).bold()
+                }
+                Section("Money in and out") {
+                    if es.isEmpty { Text("Nothing yet. Tag transfers to this pot from Home, or say “sent 5000 to Sanskar from \(pot?.name ?? "dad's money")”.").foregroundStyle(K.muted) }
+                    ForEach(es) { e in
+                        LabeledContent("\(shortDate(e.date)) · \(e.note ?? "")", value: (e.flow == "in" ? "+" : "−") + inr(e.amount))
+                    }
+                }
+                if pot?.closed != true {
+                    Section {
+                        Button("Keep the rest (\(inr(max(0, store.potLeft(potId))))) as Family income") { confirmKeep = true }
+                        Button("Close pot", role: .destructive) { store.closePot(potId); dismiss() }
+                    } footer: { Text("Keep the rest when the money is yours to use now. Close it when it's all been given back or passed on.") }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color(hex: 0x121215))
+            .navigationTitle(pot?.name ?? "Held money")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .confirmationDialog("Count \(inr(store.potLeft(potId))) as your Family income this month?", isPresented: $confirmKeep, titleVisibility: .visible) {
+                Button("Keep the rest") { store.keepRest(potId); dismiss() }
+            }
+        }
+        .tint(K.brand)
+    }
+}
+
+// MARK: - People & rules (More)
+
+struct PeopleRules: View {
+    @Environment(KoshStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        let d = store.data
+        NavigationStack {
+            List {
+                Section {
+                    if store.livePeople.isEmpty { Text("Kosh asks “Who is …?” the first time someone new sends or receives money.").foregroundStyle(K.muted) }
+                    ForEach(store.livePeople) { p in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name)
+                                let owed = store.owedBalance(p.id)
+                                if abs(owed) >= 1 { Text(owed > 0 ? "Owes you \(inr(owed))" : "You owe \(inr(-owed))").font(.system(size: 12)).foregroundStyle(owed > 0 ? K.good : K.warn) }
+                            }
+                            Spacer()
+                            Menu {
+                                ForEach(Person.roles, id: \.id) { r in Button(r.name) { store.setRole(p.name, role: r.id) } }
+                                Button("Forget", role: .destructive) { store.deletePerson(p.id) }
+                            } label: { Text(Person.roles.first { $0.id == p.role }?.name ?? p.role).font(.system(size: 14)) }
+                        }
+                    }
+                } header: { Text("People") }
+                Section {
+                    let rules = d.rules.filter(\.isLive).sorted { $0.id < $1.id }
+                    if rules.isEmpty { Text("When you change what Kosh suggested, it remembers it here.").foregroundStyle(K.muted) }
+                    ForEach(rules, id: \.id) { r in
+                        LabeledContent(r.id.capitalized, value: KoshStore.kindName(r.kind) + (r.categoryId.flatMap { d.category($0)?.name }.map { " · \($0)" } ?? "")
+                                       + (r.incomeSource.map { " · " + AppData.incomeSourceName($0) } ?? ""))
+                    }
+                    .onDelete { idx in for i in idx { store.deleteRule(rules[i].id) } }
+                } header: { Text("Remembered") } footer: { Text("Swipe left to forget a rule.") }
+                Section {
+                    Toggle("Add sure ones automatically", isOn: Binding(get: { d.settings.autoAdd != false }, set: { store.setAutoAdd($0) })).tint(K.brand)
+                } footer: { Text("Known shops, people you've labelled, salary, cash and anything you've taught Kosh are added without asking. Everything else waits on Home.") }
+            }
+            .scrollContentBackground(.hidden)
+            .background(Color(hex: 0x121215))
+            .navigationTitle("People & rules")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+        }
+        .tint(K.brand)
     }
 }
 
