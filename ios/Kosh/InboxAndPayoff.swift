@@ -19,7 +19,7 @@ struct InboxCard: View {
                 }
                 if items.count > 1 {
                     Button {
-                        let ids = items.map { store.confirmInbox($0, categoryId: chosen[$0.id]).id }
+                        let ids = items.compactMap { store.confirmInbox($0, categoryId: chosen[$0.id])?.id }
                         let s = store
                         router.show("Added \(ids.count) from your bank") { s.deleteEntries(ids) }
                     } label: { Label("Add all \(items.count)", systemImage: "checkmark") }
@@ -66,7 +66,7 @@ struct InboxCard: View {
                 }
                 .accessibilityLabel("Discard \(item.merchant)")
                 Button {
-                    let e = store.confirmInbox(item, categoryId: item.type == "expense" ? cat : nil)
+                    guard let e = store.confirmInbox(item, categoryId: item.type == "expense" ? cat : nil) else { return }
                     let s = store
                     router.show("Added \(inr(item.amount)) · \(item.merchant)") { s.deleteEntries([e.id]) }
                 } label: {

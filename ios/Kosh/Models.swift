@@ -78,6 +78,7 @@ struct InboxItem: Syncable, Hashable {
     var maybeDuplicate: Bool?   // same amount and day as one already seen (e.g. both the SMS and the email arrived)
     var txnKey: String?
     var gmailId: String?
+    var backfill: Bool?         // from a month fetch: already part of the card balances you entered
     var updatedAt: Double?
     var deleted: Bool?
 }

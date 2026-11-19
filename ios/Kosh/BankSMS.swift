@@ -48,6 +48,8 @@ enum BankSMS {
                       "total amount due", "minimum amount due", "min amt due", "will be debited", "request", "offer", "cashback of", "emi conversion",
                       "up to rs", "upto rs", "save rs", "get rs", "win rs"]
         if ignore.contains(where: { core.contains($0) }) { return nil }
+        // Cash in or out of your own account (deposit machine, ATM) is your money changing form, not income or spending.
+        if core.range(of: "deposit of cash|cash deposit|cash dep\\b|\\bcdm\\b|\\bby cash\\b|\\batm\\b|cash withdrawal|atm wdl|\\bwdl\\b", options: .regularExpression) != nil { return nil }
 
         // Credit card bill payment (lowers the card's balance).
         let isCardPayment = core.range(of: "(payment|amount paid).{0,140}credit card|credit card.{0,80}payment", options: .regularExpression) != nil

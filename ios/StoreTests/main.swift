@@ -38,7 +38,7 @@ eq(item?.categoryId, "food", "sms category from merchant")
 eq(item?.cardId, "sbi", "sms matched card")
 eq(store.addBankMessage("Rs.250.00 spent on your SBI Credit Card ending 1234 at SWIGGY on \(Parser.iso(now)).", now: now) == nil, true, "duplicate skipped")
 eq(store.liveInbox.count, 1, "one in inbox")
-let entry = store.confirmInbox(item!, categoryId: nil)
+let entry = store.confirmInbox(item!, categoryId: nil)!
 eq(entry.cardId, "sbi", "entry keeps card")
 eq(store.data.debts.first { $0.id == "sbi" }?.balance, 30250, "confirmed card spend adds to balance")
 eq(store.liveInbox.count, 0, "inbox cleared")
@@ -63,7 +63,7 @@ let d = Parser.iso(now)
 let sbiBefore = store.data.debts.first { $0.id == "sbi" }!.balance!
 let pay = store.addBankMessage("Thank you for making payment towards your SBI Credit Card XXXX0000 using BillDesk. Amount Paid: Rs. 500.00 Payment Date: \(d)", now: now.addingTimeInterval(4200))
 eq(pay?.type, "payment", "bill payment queued"); eq(pay?.cardId, "sbi", "bill payment card"); eq(pay?.categoryId, "debt", "bill payment category")
-let payEntry = store.confirmInbox(pay!, categoryId: nil)
+let payEntry = store.confirmInbox(pay!, categoryId: nil)!
 eq(payEntry.type, "expense", "payment saved as expense"); eq(payEntry.debtId, "sbi", "payment linked to card"); eq(payEntry.cardId, nil, "payment isn't a purchase")
 eq(store.data.debts.first { $0.id == "sbi" }?.balance, sbiBefore - 500, "payment lowers card balance")
 store.saveMyName("Asha Kumar")
@@ -164,7 +164,7 @@ eq(us.addBankMessage(upiSMS) != nil, true, "sms added")
 eq(us.addBankMessage(upiMail, gmailId: "g1"), nil, "email with same RRN skipped")
 eq(us.liveInbox.count, 1, "one in review")
 let it = us.liveInbox[0]
-let ent = us.confirmInbox(it, categoryId: "food")
+let ent = us.confirmInbox(it, categoryId: "food")!
 eq(ent.txnKey != nil && ent.txnKey!.hasPrefix("r"), true, "entry keeps scrambled key")
 eq(ent.txnKey!.contains("612345678901"), false, "raw reference not stored")
 eq(us.addBankMessage(upiMail, gmailId: "g1", manual: true), nil, "re-fetch of confirmed one skipped")
@@ -181,6 +181,24 @@ eq(us.addBankMessage(c1, gmailId: "g2", manual: true) != nil, true, "manual fetc
 _ = us.deleteAllTransactions()
 eq(us.addBankMessage(upiMail, gmailId: "g1") , nil, "after delete-all, auto check doesn't re-add")
 eq(us.addBankMessage(upiMail, gmailId: "g1", manual: true) != nil, true, "after delete-all, fetch this month re-adds")
+
+// 3i. Double "Add all", cash deposits, and month fetches vs card balances.
+let ws = KoshStore()
+ws.data = AppData.empty()
+ws.data.debts = [Debt(id: "i", name: "IDFC Card", kind: "card", balance: 2000, limit: 5000)]
+let wd = Parser.iso(Date())
+let one = ws.addBankMessage("INR 835.00 spent on your IDFC FIRST BANK Credit Card ending XX0000 at RENTMOJO on \(wd) at 10:00 AM.")!
+eq(ws.confirmInbox(one, categoryId: nil) != nil, true, "first confirm adds")
+eq(ws.confirmInbox(one, categoryId: nil) == nil, true, "second confirm of same item does nothing")
+eq(ws.data.liveEntries.count, 1, "only one entry")
+eq(ws.data.debts[0].balance, 2835, "new spend raises card balance")
+eq(ws.addBankMessage("Your A/C XXXXX000000 Credited INR 47000.00 on \(wd) -Deposit of Cash at S5NM000000000 CDM. Avl Bal INR 47279.17-SBI"), nil, "cash deposit skipped")
+eq(ws.addBankMessage("Rs 2000 withdrawn at ATM from A/c XX0000 on \(wd)"), nil, "atm withdrawal skipped")
+let old = ws.addBankMessage("INR 400.00 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on \(wd) at 9:00 AM.", gmailId: "m9", manual: true)!
+eq(old.backfill, true, "month fetch item marked")
+_ = ws.confirmInbox(old, categoryId: nil)
+eq(ws.data.debts[0].balance, 2835, "month fetch spend doesn't change card balance")
+eq(ws.data.monthSummary(monthKey(Date())).spent, 1235, "but it still counts as spending")
 
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.

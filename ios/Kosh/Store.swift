@@ -285,6 +285,7 @@ final class KoshStore {
         if fuzzy { item.maybeDuplicate = true }
         item.txnKey = key
         item.gmailId = gmailId
+        if manual { item.backfill = true }
         upsert(\.inbox, item)
         save()
         return item
@@ -299,8 +300,13 @@ final class KoshStore {
         return nil
     }
 
+    /// Turns a reviewed bank transaction into an entry. Returns nil if it was already added (e.g. "Add all" tapped twice).
     @discardableResult
-    func confirmInbox(_ item: InboxItem, categoryId: String?) -> Entry {
+    func confirmInbox(_ item: InboxItem, categoryId: String?) -> Entry? {
+        guard data.inbox.contains(where: { $0.id == item.id && $0.isLive }) else { return nil }
+        if data.liveEntries.contains(where: { e in (item.txnKey != nil && e.txnKey == item.txnKey) || (item.gmailId != nil && e.gmailId == item.gmailId) }) {
+            tombstone(\.inbox, item.id); save(); return nil
+        }
         let isPayment = item.type == "payment"
         var e = Entry(id: newId(), type: isPayment ? "expense" : item.type, amount: item.amount, date: item.date, note: item.merchant,
                       categoryId: isPayment ? "debt" : (item.type == "expense" ? (categoryId ?? item.categoryId ?? "other") : nil),
@@ -311,7 +317,8 @@ final class KoshStore {
             e.cardId = item.type == "expense" ? item.cardId : nil
             if let c = categoryId, c != item.categoryId { learn(from: item.merchant, categoryId: c) }
         }
-        e.applied = e.cardId != nil || e.debtId != nil
+        // Month fetches bring in past spends that your card balance already includes, so they don't change it again.
+        e.applied = (e.cardId != nil || e.debtId != nil) && item.backfill != true
         e.txnKey = item.txnKey
         e.gmailId = item.gmailId
         tombstone(\.inbox, item.id)
