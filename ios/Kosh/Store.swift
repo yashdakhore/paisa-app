@@ -103,6 +103,19 @@ final class KoshStore {
         save()
     }
 
+    /// Saves the result of Suggest my budget: salary, fixed costs, and a budget for each category shown.
+    func applyBudgetPlan(income: Double, fixed: [FixedCost], budgets: [String: Double]) {
+        data.settings.salary = income > 0 ? income : data.settings.salary
+        data.settings.fixedCosts = fixed
+        data.settings.updatedAt = nowMillis()
+        for (id, amount) in budgets {
+            if var c = data.categories.first(where: { $0.id == id && $0.isLive }) { c.budget = amount; upsert(\.categories, c) }
+        }
+        // Categories left out of the plan have no budget now (card/loan payments never do).
+        for c in data.liveCategories where budgets[c.id] == nil && (c.budget ?? 0) > 0 && c.id != "debt" { var u = c; u.budget = 0; upsert(\.categories, u) }
+        save()
+    }
+
     func saveMyName(_ name: String) {
         let n = name.trimmingCharacters(in: .whitespaces)
         data.settings.myName = n.isEmpty ? nil : n

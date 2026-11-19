@@ -138,6 +138,22 @@ eq(ds.data.liveEntries.count, 0, "no entries left"); eq(ds.liveInbox.count, 0, "
 eq(ds.data.debts[0].balance, 1000, "card balance back"); eq(ds.data.goals[0].saved, 0, "goal saved back")
 eq(ds.data.settings.salary, 30000, "salary kept"); eq(ds.data.liveDebts.count, 1, "card kept"); eq(ds.data.liveGoals.count, 1, "goal kept")
 
+// 3g. Budget suggestion.
+let fx = [FixedCost(id: "1", name: "Rent", amount: 8000, categoryId: "rent"), FixedCost(id: "2", name: "WiFi", amount: 500, categoryId: "phone"),
+          FixedCost(id: "3", name: "Recharge", amount: 300, categoryId: "phone")]
+let sug = BudgetSuggest.suggest(income: 25000, fixed: fx, emis: 2000, cardDebt: 20000)
+eq(sug.flexible, 14200, "flexible = 25000 - 8800 - 2000")
+eq(sug.lines.first { $0.categoryId == "rent" }?.amount, 8000, "rent is just the fixed cost")
+eq(sug.lines.first { $0.categoryId == "phone" }?.amount, 800, "phone fixed only (no extra share)")
+eq(sug.lines.contains { $0.categoryId == "debt" }, false, "card payments aren't a budget line")
+eq(sug.lines.allSatisfy { $0.amount.truncatingRemainder(dividingBy: 100) == 0 }, true, "round hundreds")
+eq(sug.leftover > 14200 * 0.4 && sug.leftover < 14200 * 0.5, true, "with card debt about 45% kept back")
+eq(abs(sug.income - sug.lines.reduce(0) { $0 + $1.amount } - sug.emis - sug.leftover) < 0.01, true, "everything adds up")
+eq(sug.note.hasPrefix("Put ₹"), true, "card payoff advice")
+let noDebt = BudgetSuggest.suggest(income: 25000, fixed: fx, emis: 0, cardDebt: 0)
+eq(noDebt.note.hasPrefix("Save ₹"), true, "no debt: save and invest")
+eq(BudgetSuggest.suggest(income: 10000, fixed: fx, emis: 3000, cardDebt: 0).note.hasPrefix("Your fixed costs"), true, "over income warning")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

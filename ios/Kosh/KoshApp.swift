@@ -44,6 +44,7 @@ enum SheetRoute: Identifiable {
     case payoff
     case smsSetup
     case gmail
+    case budgetWizard
 
     var id: String {
         switch self {
@@ -62,6 +63,7 @@ enum SheetRoute: Identifiable {
         case .payoff: return "payoff"
         case .smsSetup: return "sms"
         case .gmail: return "gmail"
+        case .budgetWizard: return "budget-wizard"
         }
     }
 }
@@ -173,6 +175,7 @@ struct RootView: View {
                 case .payoff: PayoffPlanner()
                 case .smsSetup: SMSSetup()
                 case .gmail: GmailSetup()
+                case .budgetWizard: BudgetWizard()
                 }
             }
             .environment(store)

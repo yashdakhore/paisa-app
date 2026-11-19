@@ -25,6 +25,22 @@ struct BudgetMain: View {
                     }
                 }
             }
+            Button { router.sheet = .budgetWizard } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "wand.and.stars").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 40, height: 40).background(K.brandGradient, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Suggest my budget").font(.system(size: 16, weight: .semibold))
+                        Text("Tell Kosh your salary and fixed costs; get a plan").font(.system(size: 13)).foregroundStyle(K.muted)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(K.faint)
+                }
+                .padding(14)
+                .background(K.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(K.brand.opacity(0.35)))
+            }
+            .buttonStyle(.plain)
             Card {
                 HStack {
                     Eyebrow(text: "Categories")

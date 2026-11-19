@@ -17,6 +17,7 @@ struct AppSettings: Codable, Equatable {
     var rule: String?
     var updatedAt: Double?
     var myName: String?         // money you send to yourself (another of your accounts) isn't spending
+    var fixedCosts: [FixedCost]? // what you pay every month no matter what (from Suggest my budget)
 }
 
 struct Category: Syncable, Hashable {
