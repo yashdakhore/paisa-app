@@ -88,7 +88,7 @@ eq(b?.amount, 1840, "sms3 amt"); eq(b?.merchant, "Blinkit", "sms3 merchant"); eq
 b = sms("Your A/c XX1234 is credited with Rs 35,000.00 on 01-11-26 by NEFT from ACME CORP PVT LTD. Avl Bal Rs 40,123")
 eq(b?.type, "income", "sms4 type"); eq(b?.amount, 35000, "sms4 amt"); eq(b?.date, "2026-11-01", "sms4 date")
 eq(sms("123456 is your OTP for txn of Rs 500 at AMAZON. Do not share.") == nil, true, "otp ignored")
-eq(sms("Total Amount Due Rs 42000 for SBI Card is due on 15-12-26") == nil, true, "due ignored")
+eq(sms("Total Amount Due Rs 18500 for XYZ Card is due on 15-12-26") == nil, true, "due ignored")
 eq(sms("Txn of Rs 999 at FLIPKART declined due to insufficient balance") == nil, true, "declined ignored")
 b = sms("Rs 299 paid to JIO via UPI on 18Nov26. UPI Ref 61234")
 eq(b?.amount, 299, "sms5 amt"); eq(b?.merchant, "Jio", "sms5 merchant"); eq(b?.date, "2026-11-18", "sms5 date")

@@ -8,8 +8,8 @@ func eq<T: Equatable>(_ a: T, _ b: T, _ label: String, line: Int = #line) {
 BudgetAlerts.enabled = false
 let store = KoshStore()
 store.data = AppData.empty()
-store.data.debts = [Debt(id: "sbi", name: "SBI Card", kind: "card", balance: 37000, limit: 42000, keywords: ["sbi"]),
-                    Debt(id: "mp", name: "mPokket loan", kind: "loan", balance: 4000, keywords: ["mpokket"])]
+store.data.debts = [Debt(id: "sbi", name: "SBI Card", kind: "card", balance: 30000, limit: 50000, keywords: ["sbi"]),
+                    Debt(id: "mp", name: "mPokket loan", kind: "loan", balance: 5000, keywords: ["mpokket"])]
 
 // 1. Learning: "porter" isn't known → Other; after a correction to Transport it's learned.
 eq(store.parse("150 porter").categoryId, "other", "porter unknown")
@@ -27,9 +27,9 @@ eq(store.data.categories.first { $0.id == "food" }?.learned?.contains("milk"), f
 var e = Entry(id: "c1", type: "expense", amount: 500, date: Parser.iso(Date()), categoryId: "food")
 e.cardId = "sbi"; e.applied = true
 store.saveEntry(e, previous: nil)
-eq(store.data.debts.first { $0.id == "sbi" }?.balance, 37500, "card purchase adds")
+eq(store.data.debts.first { $0.id == "sbi" }?.balance, 30500, "card purchase adds")
 store.deleteEntry(store.data.entries.first { $0.id == "c1" }!)
-eq(store.data.debts.first { $0.id == "sbi" }?.balance, 37000, "delete reverses")
+eq(store.data.debts.first { $0.id == "sbi" }?.balance, 30000, "delete reverses")
 
 // 3. Bank SMS → inbox → confirm.
 let now = Date()
@@ -40,7 +40,7 @@ eq(store.addBankMessage("Rs.250.00 spent on your SBI Credit Card ending 1234 at 
 eq(store.liveInbox.count, 1, "one in inbox")
 let entry = store.confirmInbox(item!, categoryId: nil)
 eq(entry.cardId, "sbi", "entry keeps card")
-eq(store.data.debts.first { $0.id == "sbi" }?.balance, 37250, "confirmed card spend adds to balance")
+eq(store.data.debts.first { $0.id == "sbi" }?.balance, 30250, "confirmed card spend adds to balance")
 eq(store.liveInbox.count, 0, "inbox cleared")
 // Changing the category when confirming teaches the merchant.
 let item2 = store.addBankMessage("Rs 120 debited from A/c XX1234 to VPA zingbus@ybl on \(Parser.iso(now)).", now: now.addingTimeInterval(700))!
@@ -50,13 +50,15 @@ eq(store.parse("300 zingbus").categoryId, "transport", "learned from inbox corre
 eq(store.addBankMessage("Your OTP is 123456 for Rs 500", now: now) == nil, true, "otp ignored")
 
 // 4. Payoff maths.
-let r = simulatePayoff([(balance: 37000, apr: 42), (balance: 4000, apr: 36)], monthly: 7000, avalanche: true)
-eq(r.months, 7, "debt-free in 7 months at 7k")
-eq(abs(r.interest - 5540) < 5, true, "interest checked by hand ≈ ₹5,540")
-let never = simulatePayoff([(balance: 37000, apr: 42)], monthly: 1000, avalanche: true)
+// One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
+let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)
+eq(r.months, 3, "paid off in 3 months")
+eq(abs(r.interest - 152.51) < 0.01, true, "interest by hand = 100 + 51 + 1.51")
+let never = simulatePayoff([(balance: 30000, apr: 42)], monthly: 1000, avalanche: true)
 eq(never.months, nil, "1k never pays 42% on 37k")
-let snow = simulatePayoff([(balance: 37000, apr: 42), (balance: 4000, apr: 36)], monthly: 7000, avalanche: false)
-eq(snow.interest >= r.interest, true, "avalanche saves at least as much")
+let r2 = simulatePayoff([(balance: 30000, apr: 42), (balance: 5000, apr: 36)], monthly: 6000, avalanche: true)
+let snow = simulatePayoff([(balance: 30000, apr: 42), (balance: 5000, apr: 36)], monthly: 6000, avalanche: false)
+eq(snow.interest >= r2.interest, true, "avalanche saves at least as much")
 
 print(failures == 0 ? "PASS: all \(checks) checks" : "\(failures) of \(checks) checks FAILED")
 exit(failures == 0 ? 0 : 1)
