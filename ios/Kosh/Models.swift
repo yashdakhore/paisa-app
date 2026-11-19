@@ -20,6 +20,7 @@ struct AppSettings: Codable, Equatable {
     var fixedCosts: [FixedCost]? // what you pay every month no matter what (from Suggest my budget)
     var familyNames: [String]?  // senders you marked as family ("Aastha", "Sanskar Dakhore")
     var autoAdd: Bool?          // add transactions Kosh is sure about without asking (default on)
+    var zeroReview: Bool?       // add everything on Kosh's best guess, nothing waits (default on)
     var smallLimit: Double?     // payments below this to/from someone new aren't asked about (default ₹200)
 }
 
@@ -105,6 +106,9 @@ struct Entry: Syncable, Hashable {
     var flow: String?           // move / held / owed: "in" or "out"
     var potId: String?          // held: which pot
     var personId: String?       // owed / held / family: who
+    var guess: Bool?            // added automatically on a guess you may want to check (optional)
+    var reason: String?         // why Kosh sorted it this way
+    var askWho: Bool?           // sent to / from someone Kosh hasn't met
     var txnKey: String?         // scrambled bank reference / fingerprint, so one transaction is never added twice
     var gmailId: String?        // the alert email it came from
 }

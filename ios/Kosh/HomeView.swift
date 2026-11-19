@@ -64,6 +64,7 @@ struct HomeView: View {
             }
 
             InboxCard()
+            GuessesCard()
             HeldMoneyCard()
 
             SummaryCard()

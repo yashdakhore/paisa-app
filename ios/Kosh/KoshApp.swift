@@ -47,6 +47,7 @@ enum SheetRoute: Identifiable {
     case budgetWizard
     case pot(String)
     case people
+    case guesses
 
     var id: String {
         switch self {
@@ -68,6 +69,7 @@ enum SheetRoute: Identifiable {
         case .budgetWizard: return "budget-wizard"
         case .pot(let id): return "pot-\(id)"
         case .people: return "people"
+        case .guesses: return "guesses"
         }
     }
 }
@@ -182,6 +184,7 @@ struct RootView: View {
                 case .budgetWizard: BudgetWizard()
                 case .pot(let id): PotDetail(potId: id)
                 case .people: PeopleRules()
+                case .guesses: GuessCheck()
                 }
             }
             .environment(store)
@@ -207,6 +210,7 @@ struct RootView: View {
             if phase == .active {
                 lock.unlock()
                 store.recategorizeBankEntries()
+                store.flushInbox()
                 Task {
                     await GmailService.shared.check()
                     await SyncService.shared.syncNow(store)

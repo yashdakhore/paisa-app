@@ -297,8 +297,17 @@ final class KoshStore {
         if t.type == "income" { item.incomeSource = AppData.guessIncomeSource(text + " " + merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? []) }
         let sure = classify(&item, text: text)
         upsert(\.inbox, item)
-        // Sure ones are added straight away; the rest wait on Home with Kosh's suggestion and reason.
-        if sure, item.maybeDuplicate != true, data.settings.autoAdd != false, let e = confirmInbox(item) {
+        // Zero-review: everything is added straight away with Kosh's best guess. Unsure ones are marked as guesses
+        // you *may* check on Home; nothing waits. (With auto-add off, unsure ones wait for review instead.)
+        let zero = data.settings.autoAdd != false && data.settings.zeroReview != false
+        let addIt = data.settings.autoAdd != false && (zero || (sure && item.maybeDuplicate != true))
+        if addIt, var e = confirmInbox(item) {
+            if !sure || item.maybeDuplicate == true {
+                e.guess = true
+                e.reason = item.maybeDuplicate == true ? "Same amount and day as another one: maybe added twice" : item.reason
+                e.askWho = item.askWho
+                upsert(\.entries, e)
+            }
             item.autoAdded = e.id
         }
         save()

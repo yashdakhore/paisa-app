@@ -62,6 +62,7 @@ extension KoshStore {
             upsert(\.inbox, item)
             if sure, item.maybeDuplicate != true, data.settings.autoAdd != false { confirmInbox(item) }
         }
+        resortGuesses(for: p)
         save()
         return p
     }
@@ -108,6 +109,68 @@ extension KoshStore {
         pot.closed = true; upsert(\.pots, pot); save()
     }
 
+    // MARK: guesses (zero-review)
+
+    var guesses: [Entry] { data.liveEntries.filter { $0.guess == true }.sorted { $0.date > $1.date } }
+
+    /// The bank alert an entry came from, as an inbox item, so the classifier can look at it again.
+    func item(from e: Entry) -> InboxItem {
+        let flowIn = e.type == "income" || e.flow == "in"
+        var it = InboxItem(id: "e-" + e.id, type: flowIn ? "income" : "expense", amount: e.amount, merchant: e.note ?? "", date: e.date,
+                           categoryId: e.type == "expense" ? (e.categoryId ?? "other") : nil, cardId: e.cardId)
+        it.incomeSource = flowIn ? AppData.guessIncomeSource(e.note ?? "", myName: data.settings.myName, familyNames: data.settings.familyNames ?? []) : nil
+        return it
+    }
+
+    /// "That's not right": re-file an entry as another kind/category/source/pot. Kosh remembers it for that payee.
+    func correct(_ e: Entry, kind: String, categoryId: String? = nil, incomeSource: String? = nil, potId: String? = nil, learn rememberIt: Bool = true) {
+        let flowIn = e.type == "income" || e.flow == "in"
+        var n = e
+        n.type = kind
+        n.categoryId = nil; n.incomeSource = nil; n.flow = nil; n.potId = nil
+        n.cardId = kind == "expense" ? e.cardId : nil
+        switch kind {
+        case "expense": n.categoryId = categoryId ?? (e.type == "expense" ? e.categoryId : nil) ?? "other"
+        case "income": n.incomeSource = incomeSource ?? AppData.guessIncomeSource(e.note ?? "", myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
+        case "held": n.flow = flowIn ? "in" : "out"; n.potId = potId
+        case "owed": n.flow = flowIn ? "in" : "out"; n.personId = e.personId ?? person(for: e.note ?? "")?.id ?? setRole(e.note ?? "Someone", role: "friend").id
+        default: n.type = "move"; n.flow = flowIn ? "in" : "out"
+        }
+        n.applied = n.cardId != nil ? e.applied : false
+        n.guess = nil; n.reason = nil; n.askWho = nil
+        if rememberIt, let note = e.note, e.source == "bank sms" {
+            if n.type == "expense", n.categoryId != e.categoryId { learn(from: note, categoryId: n.categoryId ?? "other") }
+            saveRule(note, kind: n.type, categoryId: n.type == "expense" ? n.categoryId : nil, incomeSource: n.type == "income" ? n.incomeSource : nil)
+        }
+        saveEntry(n, previous: e)
+    }
+
+    /// Zero-review mode: anything still waiting (from before, or synced in) is added as a guess.
+    func flushInbox() {
+        guard data.settings.autoAdd != false, data.settings.zeroReview != false else { return }
+        for item in data.inbox where item.isLive {
+            if var e = confirmInbox(item) { e.guess = true; e.reason = item.reason; e.askWho = item.askWho; upsert(\.entries, e) }
+        }
+        save()
+    }
+
+    /// "Looks right": stop showing it as a guess.
+    func acceptGuess(_ e: Entry) { var n = e; n.guess = nil; n.askWho = nil; upsert(\.entries, n); save() }
+
+    /// After you say who someone is, their guessed entries are sorted again.
+    func resortGuesses(for p: Person) {
+        for e in guesses where person(for: e.note ?? "")?.id == p.id {
+            var it = item(from: e)
+            let sure = classify(&it, text: it.merchant)
+            if sure {
+                correct(e, kind: it.kind ?? e.type, categoryId: it.categoryId, incomeSource: it.incomeSource, potId: it.potId, learn: false)
+            } else {
+                var n = e; n.reason = it.reason; n.askWho = it.askWho; upsert(\.entries, n)
+            }
+        }
+        save()
+    }
+
     // MARK: rules
 
     func rule(for payee: String) -> PayeeRule? { data.rules.first { $0.isLive && $0.id == Self.payeeKey(payee) } }
@@ -119,6 +182,11 @@ extension KoshStore {
     }
 
     func setAutoAdd(_ on: Bool) { data.settings.autoAdd = on; data.settings.updatedAt = nowMillis(); save() }
+    func setReviewMode(_ mode: String) {
+        data.settings.autoAdd = mode != "all"
+        data.settings.zeroReview = mode == "none"
+        data.settings.updatedAt = nowMillis(); save()
+    }
     func deleteRule(_ id: String) { tombstone(\.rules, id); save() }
     func deletePerson(_ id: String) { tombstone(\.people, id); save() }
 

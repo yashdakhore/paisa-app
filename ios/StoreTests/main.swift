@@ -252,6 +252,7 @@ eq(sm.bySource["refund"], 3, "paytm credit is cashback"); eq(sm.bySource["other"
 // 3l. Kinds, people, pots, rules, auto-add (made-up names).
 let ks = KoshStore()
 ks.data = AppData.empty()
+ks.data.settings.zeroReview = false   // "review unsure ones" mode
 ks.data.settings.myName = "Asha Kumar"
 let kd = Parser.iso(Date())
 func upiIn(_ amt: Int, _ from: String, _ rrn: String) -> InboxItem? { ks.addBankMessage("You have received ₹\(amt) via UPI. Transaction date \(kd) From \(from) RRN \(rrn)") }
@@ -305,6 +306,7 @@ eq(ks.looksLikePerson("Mdk Enterprises"), false, "business isn't a person"); eq(
 // 3m. Less to review: small payments to new people are added; one answer sorts all of a person's payments.
 let ls = KoshStore()
 ls.data = AppData.empty()
+ls.data.settings.zeroReview = false
 let ld = Parser.iso(Date())
 let tiny = ls.addBankMessage("Rs 30 debited via UPI on \(ld) to PRIYA NAIR SHARMA. RRN 710000000001")!
 eq(tiny.autoAdded != nil, true, "₹30 to someone new: added, not asked")
@@ -316,6 +318,44 @@ eq(ls.liveInbox.count, 2, "shop with unknown category still needs a category")
 ls.setRole("KUNAL MEHTA", role: "family")
 eq(ls.liveInbox.count, 0, "answering family adds all of his payments")
 eq(ls.data.liveEntries.filter { $0.categoryId == "family" }.count, 2, "as Family & gifts")
+
+// 3n. Zero-review (default): nothing waits; unsure ones are guesses you may check, and fixing one teaches Kosh.
+let zs = KoshStore()
+zs.data = AppData.empty()
+let zd = Parser.iso(Date())
+_ = zs.addBankMessage("Rs 899 debited via UPI on \(zd) to MDK ENTERPRISES. RRN 720000000001")
+_ = zs.addBankMessage("Rs 1500 debited via UPI on \(zd) to KUNAL MEHTA. RRN 720000000002")
+_ = zs.addBankMessage("Your A/C XXXXX000000 Credited INR 47000.00 on \(zd) -Deposit of Cash at S5NM000000000 CDM. Avl Bal INR 47279.17-SBI")
+_ = zs.addBankMessage("Rs 250 spent on your card at SWIGGY on \(zd) UPI Ref No 720000000003")
+eq(zs.liveInbox.count, 0, "zero-review: nothing waits")
+eq(zs.data.liveEntries.count, 4, "all four added")
+eq(zs.guesses.count, 3, "three guesses to optionally check (MDK, Kunal, big cash)")
+let zms = zs.data.monthSummary(monthKey(Date()))
+eq(zms.income, 0, "big cash deposit guessed as Moved, not income")
+eq(zms.spent, 2649, "unknowns guessed as spending")
+let mdkE = zs.guesses.first { $0.note == "Mdk Enterprises" }!
+zs.correct(mdkE, kind: "expense", categoryId: "groceries")
+eq(zs.guesses.count, 2, "corrected one is no longer a guess")
+let mdkNext = zs.addBankMessage("Rs 300 debited via UPI on \(zd) to MDK ENTERPRISES. RRN 720000000004")!
+eq(zs.data.liveEntries.first { $0.id == mdkNext.autoAdded }?.categoryId, "groceries", "next time sorted right")
+eq(zs.data.liveEntries.first { $0.id == mdkNext.autoAdded }?.guess, nil, "and not a guess")
+let kunal = zs.guesses.first { $0.note == "Kunal Mehta" }!
+eq(kunal.askWho, true, "Kunal guess offers Who is")
+zs.setRole("Kunal Mehta", role: "family")
+eq(zs.data.liveEntries.first { $0.id == kunal.id }?.categoryId, "family", "answer re-sorts the guess")
+eq(zs.guesses.count, 1, "only the cash deposit left to check")
+let cashE = zs.guesses[0]
+let zpot = zs.createPot("Dad's money")
+zs.correct(cashE, kind: "held", potId: zpot.id, learn: false)
+eq(zs.potLeft(zpot.id), 47000, "cash deposit moved into Dad's money")
+eq(zs.guesses.isEmpty, true, "all checked")
+
+// 3o. Switching to zero-review turns anything waiting into guesses.
+ls.data.settings.zeroReview = true
+_ = ls.addBankMessage("Rs 900 debited via UPI on \(ld) to NEHA RAO. RRN 730000000001")
+ls.data.inbox.append(InboxItem(id: "old1", type: "expense", amount: 640, merchant: "Arjun Das", date: ld, categoryId: "other", cardId: nil, received: nil))
+ls.flushInbox()
+eq(ls.liveInbox.count, 0, "nothing left waiting"); eq(ls.guesses.contains { $0.note == "Arjun Das" }, true, "old one is now a guess")
 
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.

@@ -240,8 +240,13 @@ struct PeopleRules: View {
                     .onDelete { idx in for i in idx { store.deleteRule(rules[i].id) } }
                 } header: { Text("Remembered") } footer: { Text("Swipe left to forget a rule.") }
                 Section {
-                    Toggle("Add sure ones automatically", isOn: Binding(get: { d.settings.autoAdd != false }, set: { store.setAutoAdd($0) })).tint(K.brand)
-                } footer: { Text("Known shops, people you've labelled, salary, cash and anything you've taught Kosh are added without asking. Everything else waits on Home.") }
+                    Picker("Bank transactions", selection: Binding(get: { d.settings.autoAdd == false ? "all" : (d.settings.zeroReview == false ? "unsure" : "none") },
+                                                                    set: { store.setReviewMode($0) })) {
+                        Text("Add everything (recommended)").tag("none")
+                        Text("Ask me about unsure ones").tag("unsure")
+                        Text("Ask me about every one").tag("all")
+                    }
+                } footer: { Text("Add everything: Kosh files each transaction on its best guess straight away. Guesses show on Home if you want to check them; your totals never wait on you.") }
             }
             .scrollContentBackground(.hidden)
             .background(Color(hex: 0x121215))
