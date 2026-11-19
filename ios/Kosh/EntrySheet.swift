@@ -51,7 +51,7 @@ struct EntrySheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text(existing == nil ? "New entry" : "Edit entry").font(.system(size: 22, weight: .semibold, design: .rounded)).padding(.top, 8)
+                    Text(existing != nil ? "Edit entry" : command.map { c -> String in if case .question = c { return "Ask Kosh" } else { return "Set up" } } ?? "New entry").font(.system(size: 22, weight: .semibold, design: .rounded)).padding(.top, 8)
 
                     if existing == nil {
                         HStack(alignment: .top, spacing: 12) {

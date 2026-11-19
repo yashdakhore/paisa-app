@@ -26,6 +26,7 @@ enum VoiceCommand: Equatable {
         case score
         case plan
         case afford(Double)
+        case overview
     }
 }
 
@@ -119,6 +120,10 @@ enum Commands {
     static func parse(_ input: String, now: Date = Date()) -> VoiceCommand? {
         var t = Parser.normalize(input).replacingOccurrences(of: "credit-card", with: "credit card")
         t = t.replacingOccurrences(of: "₹", with: " rs ")
+        // Speech often starts with "ok", "hey Kosh", "so"…
+        while let m = Parser.match("^\\s*(ok|okay|hey|hi|hello|so|and|um|uh|kosh|please|bro|yaar|acha|achha)\\b[ ,.]*", t), m.range.length > 0 {
+            t = Parser.replacing(t, m.range, with: " ")
+        }
         let isSetup = Parser.test(setupVerb, t)
         let isSpend = Parser.test(spendVerb, t)
 
@@ -208,21 +213,30 @@ enum Commands {
             if name.isEmpty { name = type } else if !name.lowercased().contains(type.lowercased()) && type != "SIP" && type != "Mutual fund" { name = type + " " + name }
             return .investment(name: name, type: type, monthly: isMonthly ? (monthly?.0 ?? amount) : nil, amount: isMonthly ? nil : amount)
         }
+        // A question we have no exact answer for gets a summary of the month, never the expense form.
+        if looksLikeQuestion(t), firstNumber(t) == nil { return .question(.overview) }
         return nil
     }
 
+    static func looksLikeQuestion(_ t: String) -> Bool {
+        Parser.test("\\?|^\\s*(how|what|what's|whats|where|which|when|why|can|could|should|will|would|am|do|does|did|is|are|have|has|show|tell|give|list|kitna|kitne|kitni|kab|kya|kaise|kahan|kaha)\\b", t)
+            || Parser.test("\\b(how much|how many|kitna|kitne|kitni|kya hai|batao|bata do|bataiye|summary|overview|report)\\b", t)
+    }
+
     static func question(_ t: String) -> VoiceCommand.Question? {
-        let asks = Parser.test("\\?|^\\s*(how|what|what's|whats|when|can|could|should|am|do|does|is|show|tell|kitna|kitne|kab|kya)\\b", t)
-        guard asks else { return nil }
-        if Parser.test("\\b(afford|buy|le sakta|kharid)\\b", t), let v = firstNumber(t) { return .afford(v) }
+        guard looksLikeQuestion(t) else { return nil }
+        if Parser.test("\\b(afford|buy|le sakta|le sakti|kharid)\\b", t), let v = firstNumber(t) { return .afford(v) }
+        if Parser.test("\\b(can|should|could) i (spend|pay|kharch)\\b|\\bkharch sakta\\b", t), let v = firstNumber(t) { return .afford(v) }
+        if Parser.test("\\b(summary|overview|report|how am i doing|how('s| is) (my|this) month|how are things|status)\\b", t) { return .overview }
         if Parser.test("\\bdebt[- ]?free\\b|pay (it |everything |all )?off|clear (my )?(debts?|loans?|cards?)|karz", t) { return .debtFree }
-        if Parser.test("\\b(owe|debt|debts|outstanding|loans?)\\b", t) { return .owe }
+        if Parser.test("\\b(owe|debt|debts|outstanding|loans?|card balance|cards? bill|udhaar|udhar)\\b", t) { return .owe }
         if Parser.test("\\b(credit )?score\\b|\\bcibil\\b", t) { return .score }
-        if Parser.test("\\b(left|remaining|bacha|bache|can i spend|should i spend|spend today|daily)\\b", t) { return .canSpend }
-        if Parser.test("\\b(spent|spend|spending|kharch)\\b", t) {
+        if Parser.test("\\b(left|remaining|bacha|bache|bachi|can i spend|should i spend|spend today|daily|per day|balance|money do i have|paisa|paise)\\b", t) { return .canSpend }
+        if Parser.test("\\b(spent|spend|spending|kharch|kharcha|expenses?|money go|went)\\b", t) || Parser.test("\\bbudget\\b", t) && !Parser.test("\\b(plan|planning)\\b", t) {
             let last = Parser.test("\\blast month\\b|\\bpichle\\b", t)
             var q = t.replacingOccurrences(of: "last month|this month|so far|till now|pichle mahine|is mahine", with: " ", options: .regularExpression)
-            q = cleanName(q, drop: ["how", "much", "did", "do", "have", "what", "spent", "spend", "spending", "total", "kitna", "kharch", "kiya", "tell", "me", "show", "this", "last", "so", "far"])
+            q = cleanName(q, drop: ["how", "much", "did", "do", "have", "what", "what's", "whats", "where", "spent", "spend", "spending", "total", "kitna", "kharch", "kharcha", "kiya", "tell", "me", "show",
+                                    "this", "last", "so", "far", "expense", "expenses", "money", "go", "went", "budget", "s", "are", "was", "were", "hua", "hai", "mera", "meri", "mere"])
             return .spent(query: q.isEmpty ? nil : q.lowercased(), lastMonth: last)
         }
         if Parser.test("\\bgoals?\\b", t) {

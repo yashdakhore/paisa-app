@@ -223,6 +223,19 @@ extension KoshStore {
             if p.free < 0 { s += " Your budgets are more than your income. Lower one, like shopping or food." }
             else if p.leftover > 0 { s += " \(inr(p.leftover)) is still spare." }
             return s
+        case .overview:
+            var parts: [String] = []
+            if ms.incomeKnown {
+                parts.append("This month: income \(inr(ms.income)), spent \(inr(ms.spent)).")
+                parts.append(ms.left > 0 ? "\(inr(ms.left)) left, about \(inr((ms.left / Double(daysLeft)).rounded(.down))) a day for \(daysLeft) days." : "You're \(inr(-ms.left)) over for the month.")
+            } else {
+                parts.append("This month you've spent \(inr(ms.spent)).")
+            }
+            if let top = ms.byCat.max(by: { $0.value < $1.value }), let c = d.category(top.key) { parts.append("Most went on \(c.name), \(inr(top.value)).") }
+            let cu = d.cardUsage()
+            if cu.limit > 0 { parts.append("Cards are at \(Int(cu.pct.rounded()))% of their limits.") }
+            if !liveInbox.isEmpty { parts.append("\(liveInbox.count) bank transaction\(liveInbox.count == 1 ? "" : "s") waiting for you on Home.") }
+            return parts.joined(separator: " ")
         case let .afford(v):
             guard ms.incomeKnown else { return noSalary }
             let left = ms.left
