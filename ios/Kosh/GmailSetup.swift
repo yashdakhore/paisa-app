@@ -20,11 +20,18 @@ struct GmailSetup: View {
                         if !gmail.status.isEmpty { LabeledContent("Status", value: gmail.status) }
                         Button {
                             Task { await gmail.check(days: 7) }
-                        } label: { Label(gmail.busy ? "Checking…" : "Check now", systemImage: "arrow.clockwise") }
+                        } label: { Label("Check now", systemImage: "arrow.clockwise") }
                             .disabled(gmail.busy)
+                        Button {
+                            Task { await gmail.check(since: GmailMessage.firstOfMonth()) }
+                        } label: {
+                            Label("Fetch from 1st \(Date().formatted(.dateTime.month(.wide)))", systemImage: "calendar.badge.clock")
+                        }
+                        .disabled(gmail.busy)
+                        if gmail.busy { ProgressView().tint(K.brand) }
                         Button("Disconnect Gmail", role: .destructive) { gmail.disconnect() }
                     } footer: {
-                        Text("Kosh checks when you open it, and in the background when iOS allows (with a notification). New transactions appear on Home under “From your bank”.")
+                        Text("Kosh checks when you open it, and in the background when iOS allows. New transactions appear on Home under “From your bank”. Fetch from the 1st reads the whole month again; transactions already in Kosh are never added twice.")
                     }
                 } else if gmail.clientId.isEmpty {
                     Section {
@@ -43,6 +50,11 @@ struct GmailSetup: View {
                     .onChange(of: clientId) { _, _ in save() }
                 } else {
                     Section {
+                        Picker("Bring in transactions from", selection: Binding(get: { gmail.startFrom }, set: { gmail.startFrom = $0 })) {
+                            Text("1st of this month").tag("month")
+                            Text("Last 7 days").tag("week")
+                            Text("Only new ones").tag("new")
+                        }
                         Button {
                             Task { await gmail.connect() }
                         } label: { Label(gmail.busy ? "Connecting…" : "Connect Gmail", systemImage: "envelope.badge") }

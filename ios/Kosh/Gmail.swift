@@ -43,6 +43,10 @@ final class GmailService: NSObject {
         status = ""
     }
     func setExtraSenders(_ s: String) { d.set(s, forKey: "gmail.extraSenders") }
+    var startFrom: String {
+        get { d.string(forKey: "gmail.startFrom") ?? "month" }
+        set { d.set(newValue, forKey: "gmail.startFrom") }
+    }
 
     var senders: [String] {
         GmailMessage.defaultSenders + extraSenders.split(whereSeparator: { $0 == "," || $0 == " " || $0 == "\n" }).map(String.init)
@@ -86,7 +90,10 @@ final class GmailService: NSObject {
             if let p: Profile = try? await get("https://gmail.googleapis.com/gmail/v1/users/me/profile") { d.set(p.emailAddress, forKey: "gmail.email") }
             status = "Connected."
             busy = false
-            _ = await check(days: 3)
+            let start = d.string(forKey: "gmail.startFrom") ?? "month"
+            if start == "month" { _ = await check(since: GmailMessage.firstOfMonth()) }
+            else if start == "week" { _ = await check(days: 7) }
+            else { _ = await check(days: 1) }
             Self.scheduleBackground()
         } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
             status = ""
@@ -111,28 +118,44 @@ final class GmailService: NSObject {
 
     // MARK: fetch
 
-    /// Look for new alert emails. Returns the transactions added for review.
+    /// Look for alert emails. Automatic checks look back a few days and skip emails already read;
+    /// a fetch you start (`since`, e.g. the 1st of the month) reads every email in the range again,
+    /// and the duplicate check (bank reference / email ID) keeps anything from being added twice.
     @discardableResult
-    func check(days: Int = 3, notify: Bool = false) async -> [InboxItem] {
+    func check(days: Int = 3, since: Date? = nil, notify: Bool = false) async -> [InboxItem] {
         guard isConnected, !busy else { return [] }
         busy = true; defer { busy = false }
+        let manual = since != nil
         do {
-            var c = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages")!
-            c.queryItems = [.init(name: "q", value: GmailMessage.query(senders: senders, days: days)), .init(name: "maxResults", value: "50")]
-            let list: MessageList = try await get(c.url!.absoluteString)
+            let q = since.map { GmailMessage.query(senders: senders, since: $0) } ?? GmailMessage.query(senders: senders, days: days)
+            var refs: [MessageList.Ref] = []
+            var page: String? = nil
+            repeat {
+                var c = URLComponents(string: "https://gmail.googleapis.com/gmail/v1/users/me/messages")!
+                c.queryItems = [.init(name: "q", value: q), .init(name: "maxResults", value: "100")] + (page.map { [.init(name: "pageToken", value: $0)] } ?? [])
+                let list: MessageList = try await get(c.url!.absoluteString)
+                refs += list.messages ?? []
+                page = list.nextPageToken
+                if manual { status = "Finding emails… \(refs.count)" }
+            } while page != nil && refs.count < 600
             var seen = Set(d.stringArray(forKey: "gmail.seen") ?? [])
             var added: [InboxItem] = []
-            for ref in (list.messages ?? []).reversed() where !seen.contains(ref.id) {
+            let todo = refs.reversed().filter { manual || !seen.contains($0.id) }
+            for (i, ref) in todo.enumerated() {
                 let m: GmailMessage.Message = try await get("https://gmail.googleapis.com/gmail/v1/users/me/messages/\(ref.id)?format=full")
-                if let item = KoshStore.shared.addBankMessage(GmailMessage.text(m), now: GmailMessage.date(m) ?? Date()) {
+                let when = GmailMessage.date(m) ?? Date()
+                if let since, when < since { seen.insert(ref.id); continue }
+                if let item = KoshStore.shared.addBankMessage(GmailMessage.text(m), now: when, gmailId: ref.id, manual: manual) {
                     added.append(item)
                     if notify { BudgetAlerts.notifyInbox(item) }
                 }
                 seen.insert(ref.id)
+                if manual { status = "Reading \(i + 1) of \(todo.count) emails · \(added.count) found" }
             }
-            d.set(Array(seen.suffix(800)), forKey: "gmail.seen")
+            d.set(Array(seen.suffix(1500)), forKey: "gmail.seen")
             d.set(Date().timeIntervalSince1970, forKey: "gmail.lastCheck")
-            status = added.isEmpty ? "Up to date." : "Found \(added.count) new."
+            status = added.isEmpty ? (manual ? "No new transactions in \(todo.count) emails." : "Up to date.")
+                                   : "Found \(added.count) new · review them on Home."
             return added
         } catch {
             status = (error as? GmailError)?.message ?? error.localizedDescription
@@ -163,7 +186,7 @@ final class GmailService: NSObject {
 
     struct Token: Decodable { var access_token: String; var expires_in: Double?; var refresh_token: String? }
     struct Profile: Decodable { var emailAddress: String }
-    struct MessageList: Decodable { struct Ref: Decodable { var id: String }; var messages: [Ref]? }
+    struct MessageList: Decodable { struct Ref: Decodable { var id: String }; var messages: [Ref]?; var nextPageToken: String? }
     struct GmailError: Error { var message: String }
 
     private func token(_ form: [String: String]) async throws -> Token {

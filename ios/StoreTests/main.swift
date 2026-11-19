@@ -154,6 +154,34 @@ let noDebt = BudgetSuggest.suggest(income: 25000, fixed: fx, emis: 0, cardDebt: 
 eq(noDebt.note.hasPrefix("Save ₹"), true, "no debt: save and invest")
 eq(BudgetSuggest.suggest(income: 10000, fixed: fx, emis: 3000, cardDebt: 0).note.hasPrefix("Your fixed costs"), true, "over income warning")
 
+// 3h. Unique references: the SMS and email of one payment count once; re-fetches don't duplicate.
+let us = KoshStore()
+us.data = AppData.empty()
+let dd = Parser.iso(Date())
+let upiSMS = "Rs 450.00 debited from A/c XX0000 on \(dd) to VPA chaipoint@ybl (UPI Ref No 612345678901)."
+let upiMail = "Hi, ₹450 debited from your account via UPI. | Transaction date | \(dd) | To | Chai Point | RRN | 612345678901 |"
+eq(us.addBankMessage(upiSMS) != nil, true, "sms added")
+eq(us.addBankMessage(upiMail, gmailId: "g1"), nil, "email with same RRN skipped")
+eq(us.liveInbox.count, 1, "one in review")
+let it = us.liveInbox[0]
+let ent = us.confirmInbox(it, categoryId: "food")
+eq(ent.txnKey != nil && ent.txnKey!.hasPrefix("r"), true, "entry keeps scrambled key")
+eq(ent.txnKey!.contains("612345678901"), false, "raw reference not stored")
+eq(us.addBankMessage(upiMail, gmailId: "g1", manual: true), nil, "re-fetch of confirmed one skipped")
+// Card spends with a time: same minute = same spend.
+let c1 = "INR 310.40 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on \(dd) at 10:15 AM."
+let c2 = "Rs.310.40 spent on IDFC FIRST Bank Credit Card XX0000 at IOCL PETROL on \(dd) 10:15"
+eq(us.addBankMessage(c1, gmailId: "g2") != nil, true, "card email added")
+eq(us.addBankMessage(c2), nil, "card sms same minute skipped")
+eq(us.addBankMessage("INR 310.40 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on \(dd) at 6:40 PM.", gmailId: "g3") != nil, true, "same amount later is a new spend")
+// Deleted ones: automatic checks never bring them back; a fetch you start can.
+us.discardInbox(us.liveInbox.first { $0.gmailId == "g2" }!)
+eq(us.addBankMessage(c1, gmailId: "g2"), nil, "discarded stays gone on auto check")
+eq(us.addBankMessage(c1, gmailId: "g2", manual: true) != nil, true, "manual fetch brings it back")
+_ = us.deleteAllTransactions()
+eq(us.addBankMessage(upiMail, gmailId: "g1") , nil, "after delete-all, auto check doesn't re-add")
+eq(us.addBankMessage(upiMail, gmailId: "g1", manual: true) != nil, true, "after delete-all, fetch this month re-adds")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

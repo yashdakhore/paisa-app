@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Observation
 import WidgetKit
@@ -245,11 +246,20 @@ final class KoshStore {
     /// Read a bank/card SMS or email and queue it for review. Returns nil if it isn't a transaction,
     /// is money moved between your own accounts, or is the very same alert again.
     @discardableResult
-    func addBankMessage(_ text: String, now: Date = Date()) -> InboxItem? {
+    func addBankMessage(_ text: String, now: Date = Date(), gmailId: String? = nil, manual: Bool = false) -> InboxItem? {
         guard let t = BankSMS.parse(text, now: now) else { return nil }
         if t.type != "payment", isMe(t.merchant) { return nil }
+        // Exact duplicates: same bank reference (SMS and email share it), same card spend at the same minute, or the same email.
+        // A fetch you start yourself may bring back things you deleted; automatic checks never do.
+        let key = Self.txnKey(t)
+        func seen(_ match: (String?, String?) -> Bool) -> Bool {
+            data.entries.contains { ($0.isLive || !manual) && match($0.txnKey, $0.gmailId) }
+                || data.inbox.contains { ($0.isLive || !manual) && match($0.txnKey, $0.gmailId) }
+        }
+        if let key, seen({ k, _ in k == key }) { return nil }
+        if let gmailId, seen({ _, g in g == gmailId }) { return nil }
         // Banks sometimes send the same alert twice within minutes.
-        if data.inbox.contains(where: { $0.amount == t.amount && $0.date == t.date && $0.merchant == t.merchant && !($0.received ?? "").isEmpty
+        if key == nil, data.inbox.contains(where: { ($0.isLive || !manual) && $0.amount == t.amount && $0.date == t.date && $0.merchant == t.merchant && !($0.received ?? "").isEmpty
             && abs((ISO8601DateFormatter().date(from: $0.received!) ?? .distantPast).timeIntervalSince(now)) < 600 }) { return nil }
         let cat: String? = t.type == "expense" ? (parse(t.merchant).sureCategory ? parse(t.merchant).categoryId : "other") : (t.type == "payment" ? "debt" : nil)
         var cardId: String? = nil
@@ -266,16 +276,27 @@ final class KoshStore {
             cardId = cards.first { d in words(d).contains { w in w.count >= 3 && !["card", "credit", "bank", "first"].contains(w) && low.contains(w) } }?.id
         }
         // The SMS and the email for one payment both arrive: keep both, but flag the second so you can discard it.
-        let seen = data.inbox.contains { $0.isLive && $0.amount == t.amount && $0.date == t.date && $0.type == t.type }
+        let fuzzy = data.inbox.contains { $0.isLive && $0.amount == t.amount && $0.date == t.date && $0.type == t.type }
             || data.liveEntries.contains { $0.source == "bank sms" && $0.amount == t.amount && $0.date == t.date && ($0.type == t.type || (t.type == "payment" && $0.debtId != nil)) }
         var merchant = t.merchant
         if t.type == "payment", let id = cardId, let name = cards.first(where: { $0.id == id })?.name { merchant = "\(name) bill payment" }
         var item = InboxItem(id: newId(), type: t.type, amount: t.amount, merchant: merchant, date: t.date, categoryId: cat, cardId: cardId,
                              received: ISO8601DateFormatter().string(from: now))
-        if seen { item.maybeDuplicate = true }
+        if fuzzy { item.maybeDuplicate = true }
+        item.txnKey = key
+        item.gmailId = gmailId
         upsert(\.inbox, item)
         save()
         return item
+    }
+
+    /// Bank reference if the alert has one; otherwise amount + day + minute + card bank (only when a time is given).
+    /// Stored scrambled (SHA-256), never as the raw number.
+    static func txnKey(_ t: BankSMS.Txn) -> String? {
+        func h(_ s: String) -> String { SHA256.hash(data: Data(s.utf8)).prefix(10).map { String(format: "%02x", $0) }.joined() }
+        if let r = t.ref { return "r" + h(r) }
+        if let time = t.time { return "f" + h("\(t.type)|\(t.amount)|\(t.date)|\(time)|\(t.cardHint ?? "")") }
+        return nil
     }
 
     @discardableResult
@@ -291,6 +312,8 @@ final class KoshStore {
             if let c = categoryId, c != item.categoryId { learn(from: item.merchant, categoryId: c) }
         }
         e.applied = e.cardId != nil || e.debtId != nil
+        e.txnKey = item.txnKey
+        e.gmailId = item.gmailId
         tombstone(\.inbox, item.id)
         saveEntry(e, previous: nil)
         return e

@@ -150,6 +150,19 @@ eq(vc("saved 2000 for emergency fund"), nil, "saving not a command")
 eq(vc("invested 2000 in nifty"), nil, "investing not a command")
 eq(vc("spent 500 on swiggy with sbi card"), nil, "card purchase not a command")
 
+// Unique references and times.
+eq(BankSMS.reference("Rs 120.00 debited from A/c XX1234 on 17-11-26 to VPA rapido@ybl (UPI Ref No 612345678901)."), "612345678901", "ref upi")
+eq(BankSMS.reference("| To | Sharma General Store | RRN | 600000000000 |"), "600000000000", "ref rrn table")
+eq(BankSMS.reference("Amount Paid: Rs. 500.00 Transaction Ref: ABC1234567"), "ABC1234567", "ref billdesk")
+eq(BankSMS.reference("Your A/C XXXXX000000 has credit for MREF of Rs 505.69"), nil, "mref without code")
+eq(BankSMS.reference("INR 250 spent on Credit Card ending XX0000 at IOCL"), nil, "no ref in card email")
+eq(BankSMS.reference("Rs 299 paid to JIO via UPI on 18Nov26. UPI Ref 61234"), nil, "too short to trust")
+eq(BankSMS.time("spent at IOCL on 18 NOV 2026 at 10:15 AM."), "10:15", "time am")
+eq(BankSMS.time("Date & Time | Nov 18, 2026, 13:12 |"), "13:12", "time 24h")
+eq(BankSMS.time("on 2026-11-16:10:22:01. Avl bal"), "10:22", "time after iso date")
+eq(BankSMS.time("at 12:30 pm"), "12:30", "noon"); eq(BankSMS.time("at 9:05 pm"), "21:05", "pm")
+eq(sms("Rs 120.00 debited from A/c XX1234 on 17-11-26 to VPA rapido@ybl (UPI Ref No 612345678901).")?.ref, "612345678901", "txn carries ref")
+
 // Gmail API messages → text.
 func b64url(_ s: String) -> String { Data(s.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
 let gjson = """
@@ -170,7 +183,7 @@ let gjson2 = """
 let gm2 = try! JSONDecoder().decode(GmailMessage.Message.self, from: Data(gjson2.utf8))
 eq(GmailMessage.text(gm2).contains("ignored html"), false, "plain text preferred")
 eq(sms(GmailMessage.text(gm2))?.merchant, "Chai Point", "gmail plain merchant")
-eq(GmailMessage.query(senders: ["a.com", " b.in ", ""], days: 3), "from:(a.com OR b.in) newer_than:3d", "gmail query")
+eq(GmailMessage.query(senders: ["a.com", " b.in ", ""], days: 3), "from:(a.com OR b.in) newer_than:3d", "gmail query"); eq(GmailMessage.query(senders: ["a.com"], since: Parser.day(2026, 11, 1)), "from:(a.com) after:2026/10/31", "gmail query")
 
 // Bank emails (made-up names and numbers, real layouts).
 b = sms("Dear Customer, INR 310.40 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on 18 NOV 2026 at 10:15 AM. Available Limit: INR 12,345.00. If not done by you, call us. Never share your OTP with anyone.")

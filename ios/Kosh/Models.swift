@@ -61,6 +61,8 @@ struct Entry: Syncable, Hashable {
     var updatedAt: Double?
     var deleted: Bool?
     var cardId: String?         // paid with this credit card: the purchase adds to the card's balance
+    var txnKey: String?         // scrambled bank reference / fingerprint, so one transaction is never added twice
+    var gmailId: String?        // the alert email it came from
 }
 
 /// A transaction read from a bank/card SMS, waiting for you to confirm.
@@ -74,6 +76,8 @@ struct InboxItem: Syncable, Hashable {
     var cardId: String?
     var received: String?
     var maybeDuplicate: Bool?   // same amount and day as one already seen (e.g. both the SMS and the email arrived)
+    var txnKey: String?
+    var gmailId: String?
     var updatedAt: Double?
     var deleted: Bool?
 }

@@ -13,6 +13,8 @@ enum BankSMS {
         var merchant: String
         var date: String        // YYYY-MM-DD
         var cardHint: String?   // bank name word for credit card purchases/payments, e.g. "sbi"
+        var ref: String? = nil  // bank's unique reference (UPI Ref / RRN / Txn ID); the SMS and the email share it
+        var time: String? = nil // "HH:mm" if the alert gives one
     }
 
     static let banks = ["sbi", "hdfc", "icici", "axis", "kotak", "idfc", "yes", "au", "rbl", "indusind", "amex", "bob", "pnb", "canara", "onecard", "one card", "supermoney", "super money", "federal", "citi", "standard chartered"]
@@ -74,7 +76,32 @@ enum BankSMS {
         } else {
             merchant = merchantName(text, credit: type == "income") ?? (type == "income" ? "Money received" : "Card/UPI payment")
         }
-        return Txn(type: type, amount: amount, merchant: merchant, date: smsDate(t, now: now), cardHint: cardHint)
+        return Txn(type: type, amount: amount, merchant: merchant, date: smsDate(t, now: now), cardHint: cardHint,
+                   ref: reference(text), time: time(text))
+    }
+
+    /// "UPI Ref No 612345678901", "RRN: 600012345678", "Txn ID AXI123456789", "Transaction Ref: ABC123456"
+    /// Only codes with at least 6 digits count, so words and masked card numbers ("XX1234") are never taken.
+    static func reference(_ raw: String) -> String? {
+        let text = normalize(raw)
+        let p = "(?i)\\b(?:upi\\s*ref(?:erence)?|rrn|utr|imps\\s*ref|neft\\s*ref|txn\\s*(?:id|ref|no)|transaction\\s*(?:id|ref(?:erence)?|no)|ref(?:erence)?|mref|approval\\s*code)"
+            + "(?:\\s*(?:no|number|id|#))?\\.?\\s*[:#-]?\\s*([A-Za-z0-9]{6,24})\\b"
+        guard let re = try? NSRegularExpression(pattern: p) else { return nil }
+        for m in re.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let r = Range(m.range(at: 1), in: text) else { continue }
+            let code = String(text[r])
+            if code.filter(\.isNumber).count >= 6, !code.lowercased().hasPrefix("xx") { return code.uppercased() }
+        }
+        return nil
+    }
+
+    /// "at 10:15 AM", "13:12", "2026-11-16:10:22:01" → "10:15", "13:12", "10:22"
+    static func time(_ text: String) -> String? {
+        guard let m = Parser.match("(?<![\\d-])(\\d{1,2}):(\\d{2})(?::\\d{2})?\\s*(am|pm|a\\.m\\.|p\\.m\\.)?", text.lowercased()),
+              var h = Int(m.groups[1]), let mi = Int(m.groups[2]), h < 24, mi < 60 else { return nil }
+        if m.groups[3].hasPrefix("p"), h < 12 { h += 12 }
+        if m.groups[3].hasPrefix("a"), h == 12 { h = 0 }
+        return String(format: "%02d:%02d", h, mi)
     }
 
     static func findAmount(_ text: String) -> (Double, Range<String.Index>)? {
