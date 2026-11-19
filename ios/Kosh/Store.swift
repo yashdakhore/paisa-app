@@ -295,7 +295,7 @@ final class KoshStore {
         if manual { item.backfill = true }
         if t.isCash { item.isCash = true }
         if t.type == "income" {
-            var src = AppData.guessIncomeSource(text + " " + merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
+            var src = AppData.guessIncomeSource(alert: text, sender: merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
             if src == "other", !t.isCash, data.looksLikeSalary(t.amount) { src = "salary" }
             item.incomeSource = src
         }
@@ -376,6 +376,20 @@ final class KoshStore {
         tombstone(\.inbox, item.id)
         saveEntry(e, previous: nil)
         return e
+    }
+
+    /// One-time repair: money-in from bank alerts saved with a source guessed by the old rules (which read greetings and
+    /// footers) is sorted again from the sender's name.
+    func repairIncomeSources() {
+        guard data.settings.sourceFix != true else { return }
+        for e in data.liveEntries where e.type == "income" && e.source == "bank sms" {
+            var src = AppData.guessIncomeSource(e.note ?? "", myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
+            if src == "other", data.looksLikeSalary(e.amount) { src = "salary" }
+            if src != e.incomeSource { var u = e; u.incomeSource = src; upsert(\.entries, u) }
+        }
+        data.settings.sourceFix = true
+        data.settings.updatedAt = nowMillis()
+        save()
     }
 
     /// Bank entries filed under Other get another look when Kosh learns new merchant words.

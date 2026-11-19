@@ -211,6 +211,7 @@ struct RootView: View {
                 lock.unlock()
                 store.recategorizeBankEntries()
                 store.flushInbox()
+                store.repairIncomeSources()
                 Task {
                     await GmailService.shared.check()
                     await SyncService.shared.syncNow(store)

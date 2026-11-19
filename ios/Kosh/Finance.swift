@@ -97,6 +97,16 @@ extension AppData {
     static func incomeSourceName(_ id: String) -> String { incomeSources.first { $0.id == id }?.name ?? "Other" }
 
     /// Where money in came from, guessed from the note or sender when you haven't said.
+    /// Words like "salary" / "refund" come from the alert text; family and company clues only from the sender's name,
+    /// never from the greeting ("Dear Yash … Dakhore") or the bank's footer ("… Limited").
+    static func guessIncomeSource(alert: String, sender: String, myName: String?, familyNames: [String]) -> String {
+        let a = " " + BankSMS.normalize(alert).lowercased().prefix(260) + " "
+        if Parser.test("\\b(salary|sal|payroll|stipend)\\b", a) { return "salary" }
+        if Parser.test("\\b(refund|cashback|reversal|reversed|refunded)\\b", a) { return "refund" }
+        if Parser.test("\\b(interest|int\\.? ?pd|int cr)\\b", a) { return "interest" }
+        return guessIncomeSource(sender, myName: myName, familyNames: familyNames)
+    }
+
     static func guessIncomeSource(_ text: String, myName: String?, familyNames: [String]) -> String {
         let t = " " + text.lowercased() + " "
         if Parser.test("\\b(salary|sal|payroll|stipend|tankhwa|pagar)\\b", t) { return "salary" }

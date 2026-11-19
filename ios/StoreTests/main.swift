@@ -367,6 +367,19 @@ var oldSal = Entry(id: "os", type: "income", amount: 25600, date: Parser.iso(Dat
 svs.data.entries = [oldSal]
 eq(svs.data.monthSummary(monthKey(Date())).income, 25600, "saved Other near salary still counts once as salary")
 
+// 3q. Greeting and footer don't decide the source.
+let gf = KoshStore()
+gf.data = AppData.empty()
+gf.data.settings.myName = "Asha Kumar"
+gf.data.settings.salary = 30000
+let viaBank = gf.addBankMessage("Dear Asha Kumar, INR 5000.00 credited to your A/c XX0000 on \(Parser.iso(Date())) from IDFC FIRST BANK. RRN 750000000001. IDFC FIRST Bank Limited")!
+eq(gf.data.liveEntries.first { $0.id == viaBank.autoAdded }?.incomeSource, "other", "surname in greeting isn't family, 'Limited' in footer isn't refund")
+var badSal = Entry(id: "bs", type: "income", amount: 30000, date: Parser.iso(Date()), note: "Money received", source: "bank sms"); badSal.incomeSource = "refund"
+gf.data.entries.append(badSal)
+gf.repairIncomeSources()
+eq(gf.data.entries.first { $0.id == "bs" }?.incomeSource, "salary", "repair re-sorts the salary credit")
+eq(gf.data.monthSummary(monthKey(Date())).income, 35000, "salary once + 5000 other")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

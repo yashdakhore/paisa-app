@@ -20,6 +20,7 @@ struct AppSettings: Codable, Equatable {
     var fixedCosts: [FixedCost]? // what you pay every month no matter what (from Suggest my budget)
     var familyNames: [String]?  // senders you marked as family ("Aastha", "Sanskar Dakhore")
     var autoAdd: Bool?          // add transactions Kosh is sure about without asking (default on)
+    var sourceFix: Bool?        // money-in sources re-sorted once with the fixed rules
     var zeroReview: Bool?       // add everything on Kosh's best guess, nothing waits (default on)
     var smallLimit: Double?     // payments below this to/from someone new aren't asked about (default ₹200)
 }
