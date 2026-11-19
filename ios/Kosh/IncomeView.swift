@@ -107,15 +107,7 @@ struct IncomeView: View {
 
             Card {
                 CardHeader(title: "Money in · \(incomes.count)")
-                if incomes.isEmpty { Text("Nothing yet. Bank alerts land here automatically, or tap Add income.").foregroundStyle(K.muted) }
-                ForEach(Array(incomes.enumerated()), id: \.element.id) { i, e in
-                    if i > 0 { RowDivider() }
-                    Button { router.sheet = .entry(e, listen: false, text: "") } label: {
-                        ListRow(symbol: "arrow.down.left", tint: K.good, title: e.note?.isEmpty == false ? e.note! : "Income",
-                                subtitle: "\(shortDate(e.date)) · \(AppData.incomeSourceName(d.incomeSource(e)))", amount: "+" + inr(e.amount), amountColor: K.good)
-                    }
-                    .buttonStyle(.plain)
-                }
+                EntryList(entries: incomes, showFilters: false, emptyText: "Nothing yet. Bank alerts land here automatically, or tap Add income.")
                 if !incomes.isEmpty { Text("Tap one to change where it came from.").font(.system(size: 12)).foregroundStyle(K.faint).padding(.top, 4) }
             }
 

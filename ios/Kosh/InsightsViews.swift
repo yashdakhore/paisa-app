@@ -192,11 +192,7 @@ struct SearchView: View {
             if !q.isEmpty {
                 Card {
                     CardHeader(title: "\(results.count) result\(results.count == 1 ? "" : "s") · \(inr(results.reduce(0) { $0 + $1.amount }))")
-                    if results.isEmpty { Text("Nothing matches “\(query)”.").foregroundStyle(K.muted) }
-                    ForEach(Array(results.prefix(100).enumerated()), id: \.element.id) { i, e in
-                        if i > 0 { RowDivider() }
-                        EntryRow(entry: e)
-                    }
+                    EntryList(entries: results, emptyText: "Nothing matches “\(query)”.")
                 }
             } else {
                 Text("Try “swiggy”, “rent”, “250” or “Nov”.").font(.system(size: 14)).foregroundStyle(K.muted).frame(maxWidth: .infinity, alignment: .leading)
@@ -255,11 +251,7 @@ struct CategoryDetail: View {
                     }
                     Card {
                         CardHeader(title: "Entries · \(monthTitle(mk))")
-                        if entries.isEmpty { Text("Nothing in \(c.name) this month.").foregroundStyle(K.muted) }
-                        ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
-                            if i > 0 { RowDivider() }
-                            EntryRow(entry: e)
-                        }
+                        EntryList(entries: entries, showFilters: false, emptyText: "Nothing in \(c.name) this month.")
                     }
                 }
                 .padding(16)

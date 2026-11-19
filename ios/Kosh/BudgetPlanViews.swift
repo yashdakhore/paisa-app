@@ -78,11 +78,7 @@ struct BudgetMain: View {
             }
             Card {
                 CardHeader(title: "All entries · \(monthTitle(router.month))")
-                if all.isEmpty { Text("No entries.").foregroundStyle(K.muted) }
-                ForEach(Array(all.enumerated()), id: \.element.id) { i, e in
-                    if i > 0 { RowDivider() }
-                    EntryRow(entry: e)
-                }
+                EntryList(entries: all)
                 Button { router.newEntry(listen: false) } label: { Label("Type an entry", systemImage: "keyboard") }
                     .buttonStyle(SecondaryButton()).padding(.top, 14)
             }

@@ -140,11 +140,12 @@ struct EntryRow: View {
     @Environment(KoshStore.self) private var store
     @Environment(Router.self) private var router
     let entry: Entry
+    var showDate = true
     var body: some View {
         let d = store.data
         let (symbol, tint, label): (String, Color, String) = {
             switch entry.type {
-            case "income": return ("arrow.down.left", K.good, "Income")
+            case "income": return ("arrow.down.left", K.good, "Earned · " + AppData.incomeSourceName(d.incomeSource(entry)))
             case "save": return ("wallet.pass", Color(hex: 0xC4B5FD), "Saving · " + (d.goals.first { $0.id == entry.goalId }?.name ?? "goal"))
             case "invest": return ("chart.line.uptrend.xyaxis", Color(hex: 0x67E8F9), "Investment · " + (d.investments.first { $0.id == entry.investmentId }?.name ?? ""))
             case "move": return ("arrow.left.arrow.right", K.muted, "Moved · not counted")
@@ -156,7 +157,7 @@ struct EntryRow: View {
         let sign = entry.type == "income" ? "+" : (entry.type == "expense" ? "−" : "")
         Button { router.sheet = .entry(entry, listen: false, text: "") } label: {
             ListRow(symbol: symbol, tint: tint, title: (entry.note?.isEmpty == false ? entry.note! : label),
-                    subtitle: "\(shortDate(entry.date)) · \(label)", amount: sign + inr(entry.amount).replacingOccurrences(of: "−", with: ""),
+                    subtitle: showDate ? "\(shortDate(entry.date)) · \(label)" : label, amount: sign + inr(entry.amount).replacingOccurrences(of: "−", with: ""),
                     amountColor: entry.type == "income" ? K.good : K.text)
         }
         .buttonStyle(.plain)
