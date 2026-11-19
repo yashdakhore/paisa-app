@@ -65,7 +65,7 @@ struct CreditView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     tip("creditcard", "Card usage: yours is \(Int(store.data.cardUsage().pct.rounded()))% now. Under 30% helps; under 10% is best.")
                     tip("calendar.badge.checkmark", "Paying every bill on time. Bill reminders are in More.")
-                    tip("hand.raised", "Fewer new loan or card applications: your rule is none until mid-2027.")
+                    tip("hand.raised", "Fewer new loan or card applications." + ((store.data.settings.rule?.isEmpty == false) ? " Your reminder: \(store.data.settings.rule!)" : ""))
                     tip("clock.arrow.circlepath", "Bureaus update roughly monthly, so give changes 30–45 days to show.")
                 }
             }
