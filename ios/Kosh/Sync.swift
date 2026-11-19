@@ -28,6 +28,9 @@ final class SyncService {
     func configure(url: String, key: String) {
         var u = url.trimmingCharacters(in: .whitespacesAndNewlines)
         while u.hasSuffix("/") { u.removeLast() }
+        // Accept the "API URL" form too (…supabase.co/rest/v1).
+        for suffix in ["/rest/v1", "/auth/v1"] where u.hasSuffix(suffix) { u.removeLast(suffix.count) }
+        while u.hasSuffix("/") { u.removeLast() }
         self.url = u
         self.key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         UserDefaults.standard.set(self.url, forKey: "kosh.sync.url")

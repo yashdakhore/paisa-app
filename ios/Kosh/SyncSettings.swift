@@ -55,12 +55,12 @@ struct SyncSettings: View {
                     Section {
                         TextField("Email", text: $email).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.emailAddress).textContentType(.username)
                         SecureField("Password", text: $password).textContentType(.password)
-                        Button { go(create: false) } label: { Text(working ? "Working…" : "Sign in") }.disabled(working)
-                        Button { go(create: true) } label: { Text("Create login") }.disabled(working)
+                        Button { go(create: true) } label: { Text(working ? "Working…" : "Create login (first time)") }.disabled(working)
+                        Button { go(create: false) } label: { Text("Sign in (already have a login)") }.disabled(working)
+                        if let message { Text(message).font(.system(size: 14)).foregroundStyle(message.hasPrefix("✓") ? K.good : K.warn) }
                     } header: { Text("2 · Your login") } footer: {
-                        Text("Use the same email and password you use in the Kosh web app.")
+                        Text("Use the same email and password later in the Kosh web app on your Mac.")
                     }
-                    if let message { Section { Text(message).foregroundStyle(message.hasPrefix("✓") ? K.good : K.warn) } }
                     Section {
                         Text(Self.setupSQL).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
                         Button("Copy setup code") { UIPasteboard.general.string = Self.setupSQL; message = "✓ Copied. Paste it into Supabase → SQL Editor → Run." }
@@ -73,6 +73,9 @@ struct SyncSettings: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
             .onAppear { url = sync.url; key = sync.key; email = sync.email }
+            // Remember what's pasted right away, so switching to Notes and back doesn't lose it.
+            .onChange(of: url) { _, v in sync.configure(url: v, key: key) }
+            .onChange(of: key) { _, v in sync.configure(url: url, key: v) }
         }
         .tint(K.brand)
     }
@@ -84,7 +87,8 @@ struct SyncSettings: View {
     }
 
     func go(create: Bool) {
-        guard url.hasPrefix("https://"), key.count > 20 else { message = "Check the project URL and key."; return }
+        guard url.trimmingCharacters(in: .whitespaces).hasPrefix("https://") else { message = "The first box needs the address starting with https://"; return }
+        guard key.trimmingCharacters(in: .whitespaces).count > 20 else { message = "The second box needs the key starting with sb_publishable_"; return }
         guard email.contains("@"), password.count >= 6 else { message = "Enter your email and a password of at least 6 characters."; return }
         sync.configure(url: url, key: key)
         working = true
