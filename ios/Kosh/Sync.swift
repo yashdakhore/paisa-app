@@ -25,8 +25,22 @@ final class SyncService {
     var isConfigured: Bool { !url.isEmpty && !key.isEmpty }
     var isSignedIn: Bool { isConfigured && Keychain.get("kosh.sync.refresh") != nil && !userId.isEmpty }
 
+    /// Pull a Supabase project address out of any pasted text.
+    static func extractURL(_ text: String) -> String? {
+        guard let r = text.range(of: "https://[A-Za-z0-9-]+\\.supabase\\.(co|in)", options: .regularExpression) else { return nil }
+        return String(text[r])
+    }
+    /// Pull a publishable (sb_publishable_…) or legacy anon (eyJ…) key out of any pasted text.
+    static func extractKey(_ text: String) -> String? {
+        for p in ["sb_publishable_[A-Za-z0-9_-]+", "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+"] {
+            if let r = text.range(of: p, options: .regularExpression) { return String(text[r]) }
+        }
+        return nil
+    }
+
     func configure(url: String, key: String) {
-        var u = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        var u = SyncService.extractURL(url) ?? url.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = SyncService.extractKey(key) ?? key
         while u.hasSuffix("/") { u.removeLast() }
         // Accept the "API URL" form too (…supabase.co/rest/v1).
         for suffix in ["/rest/v1", "/auth/v1"] where u.hasSuffix(suffix) { u.removeLast(suffix.count) }

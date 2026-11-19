@@ -41,6 +41,16 @@ struct SyncSettings: View {
                     }
                 } else {
                     Section {
+                        Button {
+                            let clip = UIPasteboard.general.string ?? ""
+                            let u = SyncService.extractURL(clip)
+                            let k = SyncService.extractKey(clip)
+                            if let u { url = u }
+                            if let k { key = k }
+                            message = (u != nil && k != nil) ? "✓ Address and key pasted." :
+                                (u == nil && k == nil) ? "Nothing found. Copy the whole note (address and key) first." :
+                                (u == nil ? "Found the key, but no address. Copy the https://…supabase.co line too." : "Found the address, but no key. Copy the sb_publishable_… line too.")
+                        } label: { Label("Paste address and key", systemImage: "doc.on.clipboard") }
                         HStack {
                             TextField("https://xxxx.supabase.co", text: $url).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                             pasteButton { url = $0 }
@@ -50,7 +60,7 @@ struct SyncSettings: View {
                             pasteButton { key = $0 }
                         }
                     } header: { Text("1 · Your Supabase project") } footer: {
-                        Text("Copy these on your Mac (Supabase → Project Settings → API Keys) and tap Paste here. Copying on the Mac and pasting on the iPhone works through Universal Clipboard.")
+                        Text("Easiest: copy the whole note that has both the address and the key, then tap “Paste address and key”. Extra text is ignored.")
                     }
                     Section {
                         TextField("Email", text: $email).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.emailAddress).textContentType(.username)
@@ -87,6 +97,8 @@ struct SyncSettings: View {
     }
 
     func go(create: Bool) {
+        if let u = SyncService.extractURL(url) { url = u }
+        if let k = SyncService.extractKey(key) { key = k }
         guard url.trimmingCharacters(in: .whitespaces).hasPrefix("https://") else { message = "The first box needs the address starting with https://"; return }
         guard key.trimmingCharacters(in: .whitespaces).count > 20 else { message = "The second box needs the key starting with sb_publishable_"; return }
         guard email.contains("@"), password.count >= 6 else { message = "Enter your email and a password of at least 6 characters."; return }
