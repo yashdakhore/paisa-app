@@ -227,6 +227,17 @@ eq(AppData.guessIncomeSource("RAVI SHARMA", myName: "Asha Kumar", familyNames: [
 eq(fs.parse("mom sent 2000").type, "income", "voice: mom sent is money in")
 eq(AppData.guessIncomeSource("mom sent", myName: nil, familyNames: []), "family", "voice: mom is family")
 
+// 3k. A credit near your salary is the salary even when the bank calls it "Money received".
+let ss = KoshStore()
+ss.data = AppData.empty()
+ss.data.settings.salary = 25600
+ss.saveEntry(Entry(id: "s1", type: "income", amount: 25600, date: Parser.iso(Date()), note: "Money received", source: "bank sms"), previous: nil)
+ss.saveEntry(Entry(id: "s2", type: "income", amount: 3, date: Parser.iso(Date()), note: "One97 Communications", source: "bank sms"), previous: nil)
+ss.saveEntry(Entry(id: "s3", type: "income", amount: 500, date: Parser.iso(Date()), note: "Money received", source: "bank sms"), previous: nil)
+let sm = ss.data.monthSummary(monthKey(Date()))
+eq(sm.salaryIncome, 25600, "salary-sized credit is salary"); eq(sm.income, 26103, "not counted twice")
+eq(sm.bySource["refund"], 3, "paytm credit is cashback"); eq(sm.bySource["other"], 500, "small unknown credit is other")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

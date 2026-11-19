@@ -64,7 +64,10 @@ const sum = (arr, f) => arr.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 export function monthSummary(state, mk) {
   const es = live(state.entries).filter((e) => monthKey(e.date) === mk);
   const incomeEntries = sum(es.filter((e) => e.type === 'income'), (e) => e.amount);
-  const isSalary = (e) => e.incomeSource ? e.incomeSource === 'salary' : /\b(salary|sal|payroll|stipend)\b/i.test(e.note || '');
+  const setSal = Number(state.settings.salary) || 0;
+  // A credit close to your salary is the salary even when the bank calls it "Money received".
+  const isSalary = (e) => e.incomeSource ? e.incomeSource === 'salary'
+    : /\b(salary|sal|payroll|stipend)\b/i.test(e.note || '') || (setSal >= 5000 && Math.abs(e.amount - setSal) <= setSal * 0.15);
   const salaryEntries = sum(es.filter((e) => e.type === 'income' && isSalary(e)), (e) => e.amount);
   // Saved salary counts until the real salary arrives; family money, refunds etc. add on top.
   const salary = salaryEntries > 0 ? salaryEntries : (Number(state.settings.salary) || 0);

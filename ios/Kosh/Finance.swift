@@ -101,6 +101,8 @@ extension AppData {
         let t = " " + text.lowercased() + " "
         if Parser.test("\\b(salary|sal|payroll|stipend|tankhwa|pagar)\\b", t) { return "salary" }
         if Parser.test("\\b(refund|cashback|reversal|reversed|refunded)\\b", t) { return "refund" }
+        // Small credits from companies (Paytm/One97, Google, Amazon…) are cashback or refunds, not people sending money.
+        if Parser.test("\\b(one97|paytm|google|amazon|flipkart|phonepe|cred|swiggy|zomato|communications|digital services|technologies|pvt|ltd|limited)\\b", t) { return "refund" }
         if Parser.test("\\b(interest|int\\.? ?pd|int cr)\\b", t) { return "interest" }
         if Parser.test("\\b(mom|mum|mummy|maa|mother|dad|papa|pappa|father|bhai|bhaiya|didi|sister|brother|family|ghar se|nana|nani|dada|dadi|chacha|mama|uncle|aunty)\\b", t) { return "family" }
         let words = Set(t.components(separatedBy: CharacterSet.letters.inverted).filter { $0.count >= 3 })
@@ -113,7 +115,11 @@ extension AppData {
     }
 
     func incomeSource(_ e: Entry) -> String {
-        e.incomeSource ?? AppData.guessIncomeSource(e.note ?? "", myName: settings.myName, familyNames: settings.familyNames ?? [])
+        if let s = e.incomeSource { return s }
+        let g = AppData.guessIncomeSource(e.note ?? "", myName: settings.myName, familyNames: settings.familyNames ?? [])
+        // Banks often label the salary credit just "Money received": a credit close to your salary is your salary.
+        if g == "other", let sal = settings.salary, sal >= 5000, abs(e.amount - sal) <= sal * 0.15 { return "salary" }
+        return g
     }
 
     func cardUsage() -> CardUsage {
