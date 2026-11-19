@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct HomeView: View {
     @Environment(KoshStore.self) private var store
@@ -55,7 +56,17 @@ struct HomeView: View {
             HStack(spacing: 8) {
                 quick("mic", "Speak") { router.newEntry(listen: true) }
                 quick("keyboard", "Type") { router.newEntry(listen: false) }
-                quick("target", "Plan") { router.tab = .plan; router.planSeg = .month }
+                quick("doc.on.clipboard", "Paste SMS") {
+                    // Copy a bank/card SMS in Messages, then tap here.
+                    let text = UIPasteboard.general.string ?? ""
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        router.show("Copy a bank SMS first (long-press it in Messages → Copy)")
+                    } else if let item = store.addBankMessage(text) {
+                        router.show("\(inr(item.amount)) · \(item.merchant) is ready below. Tap Add.")
+                    } else {
+                        router.show("No transaction found in the copied text")
+                    }
+                }
             }
 
             InboxCard()
