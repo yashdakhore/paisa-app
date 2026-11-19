@@ -61,7 +61,7 @@ struct MoreView: View {
                 .id(budgetAlertsOn)
                 RowDivider()
                 Button { router.sheet = .smsSetup } label: {
-                    ListRow(symbol: "message.badge", title: "Auto-add from bank SMS", subtitle: "Set up a Shortcut so bank alerts land in Kosh to confirm", chevron: true)
+                    ListRow(symbol: "message.badge", title: "Auto-add from bank SMS & email", subtitle: "Bank alerts land in Kosh for you to confirm", chevron: true)
                 }.buttonStyle(.plain)
                 RowDivider()
                 Button { router.sheet = .sync } label: {

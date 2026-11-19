@@ -16,6 +16,7 @@ struct AppSettings: Codable, Equatable {
     var salary: Double?
     var rule: String?
     var updatedAt: Double?
+    var myName: String?         // money you send to yourself (another of your accounts) isn't spending
 }
 
 struct Category: Syncable, Hashable {
@@ -64,13 +65,14 @@ struct Entry: Syncable, Hashable {
 /// A transaction read from a bank/card SMS, waiting for you to confirm.
 struct InboxItem: Syncable, Hashable {
     var id: String
-    var type: String            // expense | income
+    var type: String            // expense | income | payment (credit card bill paid)
     var amount: Double
     var merchant: String
     var date: String
     var categoryId: String?
     var cardId: String?
     var received: String?
+    var maybeDuplicate: Bool?   // same amount and day as one already seen (e.g. both the SMS and the email arrived)
     var updatedAt: Double?
     var deleted: Bool?
 }

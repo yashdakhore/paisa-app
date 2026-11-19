@@ -102,6 +102,26 @@ b = sms("Rs.150 paid to RAPIDO via super.money RuPay credit card on 18-11-26")
 eq(b?.cardHint, "supermoney", "supermoney hint")
 
 // learnable words
+// Bank emails (made-up names and numbers, real layouts).
+b = sms("Dear Customer, INR 310.40 spent on your IDFC FIRST BANK Credit Card ending XX0000 at IOCL on 18 NOV 2026 at 10:15 AM. Available Limit: INR 12,345.00. If not done by you, call us. Never share your OTP with anyone.")
+eq(b?.type, "expense", "idfc mail type"); eq(b?.amount, 310.40, "idfc mail amt"); eq(b?.merchant, "Iocl", "idfc mail merchant"); eq(b?.date, "2026-11-18", "idfc mail date"); eq(b?.cardHint, "idfc", "idfc mail card")
+b = sms("Dear Customer,\nPayment of Rs. 2400.00 was received on your Rewards Credit Card ending with XX0000 on 17 Nov 2026.\nThank you.\nDo not share your card details or OTP with anyone.\nTeam IDFC FIRST Bank")
+eq(b?.type, "payment", "card payment type"); eq(b?.amount, 2400, "card payment amt"); eq(b?.cardHint, "idfc", "card payment bank"); eq(b?.date, "2026-11-17", "card payment date")
+b = sms("Hi Asha,\n| ₹1 debited from your slice account xx0000 via UPI. |\n| Transaction date | 18-Nov-26 |\n| To | Sharma General Store |\n| RRN | 600000000000 |\nNot you? [Contact us](https://example.com)")
+eq(b?.type, "expense", "slice type"); eq(b?.amount, 1, "slice amt"); eq(b?.merchant, "Sharma General Store", "slice merchant"); eq(b?.date, "2026-11-18", "slice date")
+b = sms("<p>Dear Customer,</p><table><tr><td>Terminal Owner Name</td><td>PYU*Zomato Limited</td></tr><tr><td>Terminal Id</td><td>00000000</td></tr><tr><td>Date &amp; Time</td><td>Nov 18, 2026, 13:12</td></tr><tr><td>Amount (INR)</td><td>845.50</td></tr><tr><td>Transaction Type</td><td>PURCHASE</td></tr></table><p>Your SBI Debit Card was used.</p>")
+eq(b?.type, "expense", "sbi table type"); eq(b?.amount, 845.50, "sbi table amt"); eq(b?.merchant, "Zomato", "sbi table merchant"); eq(b?.date, "2026-11-18", "sbi table date"); eq(b?.cardHint, nil, "debit card is not a credit card")
+b = sms("Dear Customer, Your A/C XXXXX000000 has credit for MREF of Rs 611.25 on 16/11/26. Avl Bal Rs 1,000.00 -SBI")
+eq(b?.type, "income", "sbi cbs credit type"); eq(b?.amount, 611.25, "sbi cbs credit amt"); eq(b?.date, "2026-11-16", "sbi cbs date")
+b = sms("Dear Customer, Your A/C XXXXX000000 Credited INR 4200.00 on 13/11/26 -Deposit by transfer from Asha Kumar. Avl Bal INR 4,000.00-SBI")
+eq(b?.type, "income", "sbi cbs credited"); eq(b?.amount, 4200, "sbi cbs credited amt")
+b = sms("Dear Customer, Thank you for making payment towards your SBI Credit Card XXXX0000 using BillDesk. Amount Paid: Rs. 500.00 Payment Date: 13 Nov 2026 Transaction Ref: ABC123")
+eq(b?.type, "payment", "billdesk type"); eq(b?.amount, 500, "billdesk amt"); eq(b?.cardHint, "sbi", "billdesk card"); eq(b?.date, "2026-11-13", "billdesk date")
+eq(sms("Get up to Rs 500 cashback on your SBI Credit Card! Shop now. T&C apply.") == nil, true, "promo mail ignored")
+eq(sms("Your SBI Card statement is ready. Total Amount Due: Rs 4,321.00. Minimum Amount Due: Rs 300. Due date 05 Dec 2026.") == nil, true, "statement mail ignored")
+eq(BankSMS.cleanMerchant("PTM*ZOMATO LIMITED"), "Zomato", "gateway prefix stripped")
+eq(BankSMS.cleanMerchant("XX1234"), nil, "card number never a merchant")
+
 eq(Parser.learnableWords("Rapido ride"), ["rapido"], "learn rapido")
 eq(Parser.learnableWords("Big Bazaar Pvt Ltd"), ["big", "bazaar"], "learn bazaar")
 

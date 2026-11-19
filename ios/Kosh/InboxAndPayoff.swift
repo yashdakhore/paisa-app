@@ -35,10 +35,16 @@ struct InboxCard: View {
         let card = item.cardId.flatMap { id in d.debts.first { $0.id == id }?.name }
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Tile(symbol: item.type == "income" ? "arrow.down.left" : categorySymbol(cat), tint: item.type == "income" ? K.good : K.brand2)
+                Tile(symbol: item.type == "income" ? "arrow.down.left" : item.type == "payment" ? "creditcard" : categorySymbol(cat),
+                     tint: item.type == "income" ? K.good : K.brand2)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.merchant).font(.system(size: 16, weight: .medium)).lineLimit(1)
-                    Text("\(shortDate(item.date))" + (card.map { " · \($0)" } ?? "")).font(.system(size: 13)).foregroundStyle(K.muted)
+                    Text("\(shortDate(item.date))" + (item.type == "payment" ? (card == nil ? " · add this card under Debts to lower its balance" : " · lowers what you owe") : (card.map { " · \($0)" } ?? "")))
+                        .font(.system(size: 13)).foregroundStyle(K.muted).lineLimit(2)
+                    if item.maybeDuplicate == true {
+                        Label("Maybe already added (SMS and email both came)", systemImage: "exclamationmark.triangle")
+                            .font(.system(size: 12, weight: .medium)).foregroundStyle(K.warn)
+                    }
                 }
                 Spacer()
                 Text((item.type == "income" ? "+" : "−") + inr(item.amount)).font(.num(16, .semibold)).foregroundStyle(item.type == "income" ? K.good : K.text)
@@ -81,28 +87,45 @@ struct SMSSetup: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sample = ""
     @State private var result: String?
+    @State private var myName = ""
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    step(1, "Open the **Shortcuts** app → **Automation** tab → **+** (or **New Automation**).")
-                    step(2, "Choose **Message**. Under **Message Contains**, type **debited**. Leave the sender empty.")
-                    step(3, "Choose **Run Immediately** (and turn off **Notify When Run** if you like), then **Next**.")
-                    step(4, "Tap **New Blank Automation** → **Add Action** → search **Kosh** → **Add bank message**.")
-                    step(5, "Tap the blue **Message** field and pick **Shortcut Input** (the message's content). Tap **Done**.")
-                    step(6, "Repeat steps 1–5 for the word **spent**, so card purchase alerts are caught too.")
-                } header: { Text("Set up once in Shortcuts") } footer: {
-                    Text("Each matching SMS lands in “From your bank” on Home. Nothing is added until you tap Add. Kosh never keeps card or account numbers, and OTPs, bill reminders and failed payments are ignored.")
+                    step(1, "Open **Shortcuts** → **Automation** → **+** → choose **Email**.")
+                    step(2, "Under **Subject Contains**, type **alert**. Leave **Sender** and **Account** empty.")
+                    step(3, "Choose **Run Immediately**, then **Next** → **New Blank Automation**.")
+                    step(4, "**Add Action** → search **Kosh** → **Add bank message**.")
+                    step(5, "Tap the blue **Message** field and pick **Shortcut Input**. Tap **Done**.")
+                    step(6, "Repeat for the subject words **debited**, **transaction** and **payment**.")
+                } header: { Text("Bank emails (most reliable)") } footer: {
+                    Text("Works with alert emails from SBI, IDFC, slice, BillDesk and most banks. The Mail app must have your Gmail added. Promotions and statements are ignored.")
                 }
                 Section {
-                    TextField("Paste a bank SMS here to try", text: $sample, axis: .vertical).lineLimit(3...6)
+                    step(1, "Shortcuts → **Automation** → **+** → **Message**.")
+                    step(2, "Under **Message Contains**, type **debited**. Leave the sender empty.")
+                    step(3, "**Run Immediately** → **Next** → **New Blank Automation** → **Add Action** → **Kosh** → **Add bank message**.")
+                    step(4, "Set **Message** to **Shortcut Input** → **Done**. Repeat for the word **spent**.")
+                } header: { Text("Bank SMS") } footer: {
+                    Text("If both the SMS and the email arrive, the second one is marked “Maybe already added” so you can discard it.")
+                }
+                Section {
+                    TextField("e.g. Asha Kumar", text: $myName).textInputAutocapitalization(.words).autocorrectionDisabled()
+                        .onSubmit { store.saveMyName(myName) }
+                        .onChange(of: myName) { _, v in store.saveMyName(v) }
+                } header: { Text("Your name") } footer: {
+                    Text("Money you send to your own name (another of your accounts) is skipped, not counted as spending.")
+                }
+                Section {
+                    TextField("Paste a bank SMS or email here to try", text: $sample, axis: .vertical).lineLimit(3...8)
                     Button("Try it") {
                         if let item = store.addBankMessage(sample) {
-                            result = "✓ Read as \(item.type == "income" ? "money in" : "money out"): \(inr(item.amount)) · \(item.merchant) · \(shortDate(item.date)). It's now on Home under “From your bank”."
+                            let kind = item.type == "income" ? "money in" : item.type == "payment" ? "card bill paid" : "money out"
+                            result = "✓ Read as \(kind): \(inr(item.amount)) · \(item.merchant) · \(shortDate(item.date)). It's now on Home under “From your bank”."
                             sample = ""
                         } else {
-                            result = "That doesn't look like a completed transaction (or it's a duplicate)."
+                            result = "That doesn't look like a completed transaction (or it's a duplicate, or money to yourself)."
                         }
                     }
                     .disabled(sample.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -111,9 +134,10 @@ struct SMSSetup: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color(hex: 0x121215))
-            .navigationTitle("Auto-add from bank SMS")
+            .navigationTitle("Auto-add from bank")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+            .onAppear { myName = store.data.settings.myName ?? "" }
         }
         .tint(K.brand)
     }
