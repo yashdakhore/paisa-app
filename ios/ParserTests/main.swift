@@ -163,6 +163,10 @@ eq(BankSMS.time("on 2026-11-16:10:22:01. Avl bal"), "10:22", "time after iso dat
 eq(BankSMS.time("at 12:30 pm"), "12:30", "noon"); eq(BankSMS.time("at 9:05 pm"), "21:05", "pm")
 eq(sms("Rs 120.00 debited from A/c XX1234 on 17-11-26 to VPA rapido@ybl (UPI Ref No 612345678901).")?.ref, "612345678901", "txn carries ref")
 
+// Auto-debits (NACH).
+b = sms("भारतीय स्टेट बैंक की ओर से शुभकामनाएं ! Greetings from SBI ! Dear Customer, Your A/C XXXXX000000 has a debit by NACH of Rs 500.00 on 05/11/26. Avl Bal Rs 3675.44. Download YONO - SBI")
+eq(b?.type, "expense", "nach is money out"); eq(b?.amount, 500, "nach amount"); eq(b?.isMandate, true, "nach is auto-debit"); eq(b?.merchant, "Auto-debit ₹500", "named by amount"); eq(b?.date, "2026-11-05", "nach date")
+
 // Gmail API messages → text.
 func b64url(_ s: String) -> String { Data(s.utf8).base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") }
 let gjson = """

@@ -135,6 +135,8 @@ struct InboxItem: Syncable, Hashable {
     var reason: String?         // why Kosh suggested this, shown under the row
     var askWho: Bool?           // a person Kosh hasn't met: ask "Who is …?"
     var isCash: Bool?           // cash deposit / ATM
+    var isMandate: Bool?        // auto-debit (NACH / e-mandate)
+    var investName: String?     // invested: which investment (Groww, Zerodha, SIP (auto-debit)…)
     var autoAdded: String?      // entry id, when Kosh was sure and added it straight away (not stored in the inbox)
     var backfill: Bool?         // from a month fetch: already part of the card balances you entered
     var updatedAt: Double?

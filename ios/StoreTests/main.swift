@@ -398,6 +398,26 @@ eq(emiS.data.categories.first { $0.id == "debt" }?.name, "EMI & loans", "categor
 eq(emiS.parse("2499 bajaj finance").categoryId, "debt", "bajaj finance → EMI & loans")
 eq(Subcats.investmentTypes.contains("ELSS (tax saver)"), true, "ELSS available")
 
+// 3t. Investing: NACH auto-debits and app payments are Invested, not Spent.
+let iv = KoshStore()
+iv.data = AppData.empty()
+let ivd = Parser.iso(Date())
+let n1 = iv.addBankMessage("Dear Customer, Your A/C XXXXX000000 has a debit by NACH of Rs 500.00 on \(ivd). Avl Bal Rs 3675.44 -SBI")!
+let n1e = iv.data.liveEntries.first { $0.id == n1.autoAdded }!
+eq(n1e.type, "invest", "NACH → Invested"); eq(n1e.guess, true, "but a guess (could be EMI)")
+eq(iv.data.liveInvestments.first { $0.name == "SIP (auto-debit)" }?.invested, 500, "added to SIP (auto-debit)")
+let g1 = iv.addBankMessage("Rs 1000 debited via UPI on \(ivd) to NEXTBILLION TECHNOLOGY PRIVATE LIMITED (Groww). RRN 770000000001")!
+eq(iv.data.liveEntries.first { $0.id == g1.autoAdded }?.type, "invest", "Groww payment → Invested")
+eq(iv.data.liveInvestments.first { $0.name == "Groww" }?.invested, 1000, "into Groww")
+let ivm = iv.data.monthSummary(monthKey(Date()))
+eq(ivm.spent, 0, "investing isn't spending"); eq(ivm.invested, 1500, "invested 1500")
+// Teach: the ₹200 auto-debit is insurance.
+let n2 = iv.addBankMessage("Dear Customer, Your A/C XXXXX000000 has a debit by NACH of Rs 200.00 on \(ivd). Avl Bal Rs 2975.44 -SBI")!
+iv.correct(iv.data.liveEntries.first { $0.id == n2.autoAdded }!, kind: "expense", categoryId: "health")
+eq(iv.data.liveInvestments.first { $0.name == "SIP (auto-debit)" }?.invested, 500, "correction takes it back out of the SIP")
+let n3 = iv.addBankMessage("Dear Customer, Your A/C XXXXX000000 has a debit by NACH of Rs 200.00 on \(Parser.iso(Parser.addDays(Date(), -1))). Avl Bal Rs 2775.44 -SBI")!
+eq(iv.data.liveEntries.first { $0.id == n3.autoAdded }?.categoryId, "health", "next ₹200 auto-debit remembered as Health")
+
 // 4. Payoff maths.
 // One debt, 10,000 at 12% a year (1% a month), paying 5,000: month 1: 10,100 → 5,100; month 2: 5,151 → 151; month 3: 152.51 → 0.
 let r = simulatePayoff([(balance: 10000, apr: 12)], monthly: 5000, avalanche: true)

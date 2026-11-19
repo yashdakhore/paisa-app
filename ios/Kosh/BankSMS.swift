@@ -16,6 +16,7 @@ enum BankSMS {
         var ref: String? = nil  // bank's unique reference (UPI Ref / RRN / Txn ID); the SMS and the email share it
         var time: String? = nil // "HH:mm" if the alert gives one
         var isCash = false      // cash deposit / ATM withdrawal: your money changing form
+        var isMandate = false   // auto-debit (NACH / ACH / e-mandate / autopay): usually a SIP, EMI or insurance
     }
 
     static let banks = ["sbi", "hdfc", "icici", "axis", "kotak", "idfc", "yes", "au", "rbl", "indusind", "amex", "bob", "pnb", "canara", "onecard", "one card", "supermoney", "super money", "federal", "citi", "standard chartered"]
@@ -57,7 +58,8 @@ enum BankSMS {
             && core.range(of: "received|thank you for making payment|payment success|successful|amount paid", options: .regularExpression) != nil
 
         let creditAt = core.range(of: "\\b(credited|received|deposited|refunded|refund|has credit|credit for)\\b", options: .regularExpression)?.lowerBound
-        let debitAt = core.range(of: "\\b(debited|spent|paid|purchase|withdrawn|sent|used|done using)\\b", options: .regularExpression)?.lowerBound
+        let debitAt = core.range(of: "\\b(debited|debit by|has a debit|spent|paid|purchase|withdrawn|sent|used|done using|dr\\.? by|ach d-|nach dr)\\b", options: .regularExpression)?.lowerBound
+        let isMandate = core.range(of: "\\b(nach|ach d-|ach debit|ach dr|e-?mandate|mandate|autopay|auto-?debit|standing instruction|si debit)\\b", options: .regularExpression) != nil
         let type: String
         if isCardPayment { type = "payment" }
         else if let d = debitAt, let c = creditAt { type = d < c ? "expense" : "income" }
@@ -76,13 +78,16 @@ enum BankSMS {
         let merchant: String
         if isCash {
             merchant = type == "income" ? "Cash deposit" : "ATM withdrawal"
+        } else if isMandate, type == "expense", merchantName(text, credit: false) == nil {
+            // "has a debit by NACH of Rs 500": no payee in the alert, so the amount names it (and a rule can remember it).
+            merchant = "Auto-debit " + (amount == amount.rounded() ? "₹\(Int(amount))" : "₹\(amount)")
         } else if type == "payment" {
             merchant = (cardHint.map { $0.uppercased() + " " } ?? "") + "card bill payment"
         } else {
             merchant = merchantName(text, credit: type == "income") ?? (type == "income" ? "Money received" : "Card/UPI payment")
         }
         return Txn(type: type, amount: amount, merchant: merchant, date: smsDate(t, now: now), cardHint: cardHint,
-                   ref: reference(text), time: time(text), isCash: isCash)
+                   ref: reference(text), time: time(text), isCash: isCash, isMandate: isMandate)
     }
 
     /// "UPI Ref No 612345678901", "RRN: 600012345678", "Txn ID AXI123456789", "Transaction Ref: ABC123456"

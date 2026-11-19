@@ -294,6 +294,7 @@ final class KoshStore {
         item.gmailId = gmailId
         if manual { item.backfill = true }
         if t.isCash { item.isCash = true }
+        if t.isMandate { item.isMandate = true }
         if t.type == "income" {
             var src = AppData.guessIncomeSource(alert: text, sender: merchant, myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
             if src == "other", !t.isCash, data.looksLikeSalary(t.amount) { src = "salary" }
@@ -360,12 +361,14 @@ final class KoshStore {
         case "owed":
             e.flow = flow
             e.personId = item.personId ?? person(for: item.merchant)?.id ?? setRole(item.merchant, role: "friend").id
+        case "invest":
+            e.investmentId = investment(named: item.investName ?? "Other investments").id
         default:
             e.type = "move"
             e.flow = flow
         }
         // Month fetches bring in past spends that your card balance already includes, so they don't change it again.
-        e.applied = (e.cardId != nil || e.debtId != nil) && item.backfill != true
+        e.applied = ((e.cardId != nil || e.debtId != nil) && item.backfill != true) || e.investmentId != nil
         e.txnKey = item.txnKey
         e.gmailId = item.gmailId
         // You changed Kosh's suggestion: remember it for this payee (pots are one-off, so only the kind is kept for them).

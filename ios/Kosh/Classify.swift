@@ -10,8 +10,33 @@ import Foundation
 /// Kosh suggests a kind with a reason. When it's sure (a rule you taught it, a person you labelled, a known shop,
 /// salary, cash), it adds the transaction by itself; otherwise it waits on Home for you.
 extension KoshStore {
-    static let kinds: [(id: String, name: String)] = [("expense", "Spent"), ("income", "Earned"), ("move", "Moved"),
+    static let kinds: [(id: String, name: String)] = [("expense", "Spent"), ("income", "Earned"), ("invest", "Invested"), ("move", "Moved"),
                                                       ("held", "Held"), ("owed", "Lent / repaid")]
+
+    /// Investment apps and mutual-fund rails, as banks name them in alerts.
+    static func investPlatform(_ text: String) -> String? {
+        let t = " " + text.lowercased() + " "
+        let map: [(String, String)] = [("groww|nextbillion", "Groww"), ("zerodha", "Zerodha"), ("indmoney|finzoom|indstocks|ind money", "INDmoney"),
+                                       ("upstox|rksv", "Upstox"), ("angel one|angel broking", "Angel One"), ("paytm money", "Paytm Money"),
+                                       ("smallcase", "smallcase"), ("kuvera", "Kuvera"), ("\\bet money|etmoney", "ET Money"),
+                                       ("\\biccl\\b|indian clearing|bse star|bse limited|mf utilit|camsonline|\\bcams\\b|kfintech|\\bkfin\\b|mutual fund", "Mutual funds")]
+        return map.first { Parser.test("(" + $0.0 + ")", t) }?.1
+    }
+
+    /// The investment to add to, made if it doesn't exist yet.
+    func investment(named name: String) -> Investment {
+        if let i = data.liveInvestments.first(where: { $0.name.lowercased() == name.lowercased() }) { return i }
+        let type: String
+        switch name {
+        case "Zerodha", "Upstox", "Angel One", "INDmoney": type = "Stocks"
+        case "SIP (auto-debit)": type = "SIP"
+        case "Groww", "Mutual funds", "Kuvera", "ET Money", "Paytm Money": type = "Mutual fund"
+        default: type = "Other"
+        }
+        let i = Investment(id: newId(), name: name, type: type, invested: 0, value: 0)
+        upsert(\.investments, i)
+        return i
+    }
     static func kindName(_ id: String) -> String { kinds.first { $0.id == id }?.name ?? "Spent" }
 
     static func payeeKey(_ name: String) -> String {
@@ -134,9 +159,10 @@ extension KoshStore {
         case "income": n.incomeSource = incomeSource ?? AppData.guessIncomeSource(e.note ?? "", myName: data.settings.myName, familyNames: data.settings.familyNames ?? [])
         case "held": n.flow = flowIn ? "in" : "out"; n.potId = potId
         case "owed": n.flow = flowIn ? "in" : "out"; n.personId = e.personId ?? person(for: e.note ?? "")?.id ?? setRole(e.note ?? "Someone", role: "friend").id
+        case "invest": n.investmentId = e.investmentId ?? investment(named: Self.investPlatform(e.note ?? "") ?? ((e.note ?? "").hasPrefix("Auto-debit") ? "SIP (auto-debit)" : "Other investments")).id
         default: n.type = "move"; n.flow = flowIn ? "in" : "out"
         }
-        n.applied = n.cardId != nil ? e.applied : false
+        n.applied = n.cardId != nil ? e.applied : (kind == "invest")
         n.guess = nil; n.reason = nil; n.askWho = nil
         if rememberIt, let note = e.note, e.source == "bank sms" {
             if n.type == "expense", n.categoryId != e.categoryId { learn(from: note, categoryId: n.categoryId ?? "other") }
@@ -233,7 +259,20 @@ extension KoshStore {
                 if openPots.count == 1 { item.potId = openPots[0].id } else { return set("held", "Held money: pick which pot", sure: false) }
             }
             if r.kind == "owed" { item.personId = person(for: item.merchant)?.id }
+            if r.kind == "invest" { item.investName = Self.investPlatform(item.merchant) ?? (item.isMandate == true ? "SIP (auto-debit)" : "Other investments") }
             return set(r.kind, "You told Kosh how to treat \(item.merchant)", sure: true)
+        }
+
+        // Investing: SIPs and money sent to Groww / Zerodha / INDmoney… Money back from them is your own money.
+        if let platform = Self.investPlatform(String(alert) + " " + item.merchant) {
+            if flowIn { return set("move", "Money back from \(platform): your own money", sure: true) }
+            item.investName = platform
+            return set("invest", "Invested via \(platform)", sure: true)
+        }
+        if item.isMandate == true, !flowIn {
+            item.investName = "SIP (auto-debit)"
+            let day = Int(item.date.suffix(2)) ?? 0
+            return set("invest", "Auto-debit on the \(ordinal(day)): usually a SIP. If it's an EMI or insurance, change it once and Kosh remembers", sure: false)
         }
 
         if let p = person(for: item.merchant) {
