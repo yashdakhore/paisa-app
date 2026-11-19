@@ -78,6 +78,7 @@ enum SheetRoute: Identifiable {
 final class Router {
     var tab: Tab = .home
     var planSeg: PlanSeg = .month
+    var budgetSeg: BudgetSeg = .budget
     var month: String = monthKey(Date())
     var sheet: SheetRoute?
     var toast: String?

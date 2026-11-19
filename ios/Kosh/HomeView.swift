@@ -50,7 +50,8 @@ struct HomeView: View {
                         .padding(.top, 14).lineLimit(1)
                 }
                 HStack(spacing: 8) {
-                    HeroStat(label: "Income", value: inr(ms.income))
+                    Button { router.tab = .budget; router.budgetSeg = .income } label: { HeroStat(label: "Income ›", value: inr(ms.income)) }
+                        .buttonStyle(.plain).accessibilityHint("Opens Income")
                     HeroStat(label: "Spent", value: inr(ms.spent))
                     HeroStat(label: "Saved", value: inr(ms.saved + ms.invested))
                 }

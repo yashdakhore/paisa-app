@@ -1,17 +1,19 @@
 import Charts
 import SwiftUI
 
-enum BudgetSeg: String, CaseIterable { case budget = "Budget", trends = "Trends", search = "Search" }
+enum BudgetSeg: String, CaseIterable { case budget = "Budget", income = "Income", trends = "Trends", search = "Search" }
 
 /// Budget tab: the month's budget, spending trends, and search across all entries.
 struct BudgetView: View {
-    @State private var seg: BudgetSeg = .budget
+    @Environment(Router.self) private var router
     var body: some View {
+        @Bindable var router = router
         VStack(spacing: 12) {
-            Picker("View", selection: $seg) { ForEach(BudgetSeg.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
+            Picker("View", selection: $router.budgetSeg) { ForEach(BudgetSeg.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                 .pickerStyle(.segmented)
-            switch seg {
+            switch router.budgetSeg {
             case .budget: BudgetMain()
+            case .income: IncomeView()
             case .trends: TrendsView()
             case .search: SearchView()
             }
